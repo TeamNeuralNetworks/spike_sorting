@@ -1,0 +1,160 @@
+# -*- coding: utf-8 -*-
+"""
+Created on Mon Oct 23 13:55:43 2023
+
+@author: Pierre.LE-CABEC
+"""
+
+import spikeinterface.postprocessing as spost
+from viziphant.statistics import plot_time_histogram
+from viziphant.rasterplot import rasterplot_rates
+from elephant import statistics, kernels
+from elephant.statistics import time_histogram
+from neo.core import SpikeTrain
+import spikeinterface.widgets as sw
+
+from quantities import s, ms
+import numpy as np
+import math 
+from scipy import stats
+import os
+import multiprocessing
+import matplotlib.pyplot as plt
+from matplotlib.gridspec import GridSpec
+import quantities as pq
+
+from curation.clean_unit import get_highest_amplitude_channel
+
+def plot_sorting_summary(we, sorter_name, delay, mouse, save_path=None, trial_len=9, acelerate=True):
+    
+    spost.compute_spike_locations(we)
+    
+    max_unit_amplitude = 0
+    min_unit_amplitude = 0
+    for unit_id in we.sorting.get_unit_ids():
+        current_max_amplitude = we.get_template(unit_id=unit_id).max()
+        if current_max_amplitude > max_unit_amplitude:
+            max_unit_amplitude = current_max_amplitude
+         
+        current_min_amplitude = we.get_template(unit_id=unit_id).min()
+        if current_min_amplitude < min_unit_amplitude:
+            min_unit_amplitude = current_min_amplitude
+            
+    ylim_margin = (max_unit_amplitude-min_unit_amplitude)*0.01
+    ylim = (min_unit_amplitude-ylim_margin, max_unit_amplitude+ylim_margin)
+    
+    if acelerate:
+        num_processes = multiprocessing.cpu_count()  # You can adjust this based on your CPU
+        pool = multiprocessing.Pool(processes=num_processes)
+    
+    for unit_id in we.sorting.get_unit_ids():
+        if acelerate:
+            pool.apply_async(plot_summary_for_unit, (unit_id, we, sorter_name, delay, mouse, ylim, None, save_path, trial_len))
+        else:
+            plot_summary_for_unit(unit_id, we, sorter_name, delay, mouse, ylim, None, save_path, trial_len)
+
+    if acelerate:
+        # Close the pool and wait for all processes to finish
+        pool.close()
+        pool.join()
+
+def plot_summary_for_unit(unit_id, we, sorter_name, delay, mouse, ylim=None, unit_for_plot_name=None, save_path=None, trial_len=9):
+    
+    unit_for_plot_name = unit_id if unit_for_plot_name is None else unit_for_plot_name
+    
+    fig = plt.figure(figsize=(30, 13))
+    gs = GridSpec(nrows=3, ncols=7)
+    fig.suptitle(f'{sorter_name}\n{mouse} {delay}\nunits {unit_for_plot_name} (Total spike {we.sorting.get_total_num_spikes()[unit_id]})',)
+    ax0 = fig.add_subplot(gs[0, 0:2])
+    ax1 = fig.add_subplot(gs[0, 2:4])
+    ax1.set_title('Mean firing rate during a trial')
+    ax8 = fig.add_subplot(gs[0, 4:6])
+    ax8.set_title('zscore firing rate during a trial')
+    ax7 = fig.add_subplot(gs[1:3, 0:3])
+    ax2 = fig.add_subplot(gs[1, 3:6])
+    ax2.set_title('Waveform of the unit')
+    ax3 = fig.add_subplot(gs[0, 6])
+    ax4 = fig.add_subplot(gs[1, 6], sharey = ax3)
+    ax5 = fig.add_subplot(gs[2, 6])
+    ax6 = fig.add_subplot(gs[2, 3:6])
+    
+    window_ms_autocorr = 200
+    sw.plot_autocorrelograms(we.sorting, unit_ids=[unit_id], axes=ax0, bin_ms=1, window_ms=window_ms_autocorr, )
+    ax0.set_xlim(-(window_ms_autocorr/2), (window_ms_autocorr/2))
+    ax0.set_title('Autocorrelogram')
+    
+    current_spike_train = we.sorting.get_unit_spike_train(unit_id)/we.sampling_frequency
+    current_spike_train_list = []
+    while len(current_spike_train) > 0: #this loop is to split the spike train into trials with correct duration in seconds
+        # Find indices of elements under 9 (9 sec being the duration of the trial)
+        indices = np.where(current_spike_train < trial_len)[0]
+        if len(indices)>0:
+            # Append elements to the result list
+            current_spike_train_list.append(SpikeTrain(current_spike_train[indices]*s, t_stop=trial_len))
+            # Remove the appended elements from the array
+            current_spike_train = np.delete(current_spike_train, indices)
+            # Subtract 9 from all remaining elements
+        current_spike_train -= trial_len
+    
+    kernel = kernels.GaussianKernel(sigma=100 * pq.ms)
+    rates = statistics.instantaneous_rate(current_spike_train_list,
+                                        sampling_period=50 * pq.ms,
+                                        kernel=kernel)
+    edge_effect_bin = math.ceil(100/50)
+    time_map = np.arange(0, trial_len, 0.05)
+    rates = np.array(rates)
+    if trial_len == 9:
+        rates = rates[edge_effect_bin:-edge_effect_bin]
+        time_map = time_map[edge_effect_bin:-edge_effect_bin]
+    rate_zscored = stats.zscore(rates)
+    
+    mean_rate = np.mean(rate_zscored, axis=1)
+    sem_rate = stats.sem(rate_zscored, axis=1)
+    time_map = time_map[:len(mean_rate)]
+    ax8.plot(time_map, mean_rate)
+    ax8.fill_between(time_map, mean_rate+sem_rate, mean_rate-sem_rate, alpha=0.5)
+    
+    bin_size = 100
+    histogram = time_histogram(current_spike_train_list, bin_size=bin_size*ms, output='mean')
+    histogram = histogram*(1000/bin_size)
+    ax1.set_ylabel('Freqeuncy (Hz)')
+
+    plot_time_histogram(histogram, units='s', axes=ax1)
+    ax1.set_xlim(0, trial_len)
+    sw.plot_spike_locations(we, unit_ids=[unit_id], ax=ax7, with_channel_ids=True)
+    ax7.set_title('Unit localisation')
+    sw.plot_unit_waveforms_density_map(we, unit_ids=[unit_id], ax=ax2)
+    if ylim is not None:
+        ax2.set_ylim(ylim)
+    template = we.get_template(unit_id=unit_id).copy()
+    for curent_ax in [
+                      ax3, 
+                      ax4, 
+                      ]:
+        max_channel = np.argmax(np.abs(template))%template.shape[1]
+        template[:,max_channel] = 0
+        mean_residual = np.mean(np.abs((we.get_waveforms(unit_id=unit_id)[:,:,max_channel] - we.get_template(unit_id=unit_id)[:,max_channel])), axis=0)
+        curent_ax.plot(mean_residual)
+        curent_ax.plot(we.get_template(unit_id=unit_id)[:,max_channel])
+        curent_ax.set_title('Mean residual of the waveform for channel '+str(max_channel))
+        if ylim is not None:
+            curent_ax.set_ylim(ylim)
+    
+    
+    waveform = we.get_waveforms(unit_id=unit_id)
+    waveform = get_highest_amplitude_channel(waveform).T
+    ax5.plot(waveform, alpha=0.1, color='b')
+    ax5.plot(np.median(waveform, axis=1), color='r', alpha=1)
+    ax5.set_title('Waveform of all spike')
+    plt.tight_layout()
+
+    rasterplot_rates(current_spike_train_list, ax=ax6, histscale=0.1)
+    if save_path is not None:
+        if not os.path.isdir(fr'{save_path}\Unit_summary_plot'):
+            os.makedirs(fr'{save_path}\Unit_summary_plot')
+        plt.savefig(fr'{save_path}\Unit_summary_plot\Unit_{int(unit_for_plot_name)}.pdf')
+        
+        if not os.path.isdir(fr'{save_path}\Unit_summary_plot\png_version'):
+            os.makedirs(fr'{save_path}\Unit_summary_plot\png_version')
+        plt.savefig(fr'{save_path}\Unit_summary_plot\png_version\Unit_{int(unit_for_plot_name)}.png')
+        plt.close()
