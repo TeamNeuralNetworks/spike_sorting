@@ -22,6 +22,13 @@ import shutil
 warnings.filterwarnings('ignore', category=FutureWarning)
 warnings.filterwarnings('ignore', category=RuntimeWarning)
 
+
+big_artefact_methods = ['mad', 
+                        'abs_value']
+
+dimensionality_reduction_method_list = ['pca', 
+                                        'phate']
+
 def get_highest_amplitude_channel(waveforms):
     
     new_current_selected_waveforms = []

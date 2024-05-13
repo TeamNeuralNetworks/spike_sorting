@@ -53,41 +53,36 @@ def make_sorter_param_dict():
 
 def sorting_param_event_handler(window, values, event, current_sorter_param):
     
-    print(event, values[event], type(values[event]))
-    try:
-        if values[event] == 'None' or '':
-            param_value = None
-        elif values[event] == 'True':
-            param_value = True
-        elif values[event] == 'False':
-            param_value = False
-        else:
-            param_value = values[event]
-        
-        if isinstance(event, tuple):
-            try:
-                if '.' or ',' in values[event]:
-                    param_to_convert = values[event].replace(',', '.')
-                    param_value = float(param_to_convert)
-                else:
-                    param_value = int(values[event])
-            except ValueError:
-                pass
-                
-            current_sorter_param[0]['sorting_param'][event[1]] = list(current_sorter_param[0]['sorting_param'][event[1]])
-            current_sorter_param[0]['sorting_param'][event[1]][event[0]] = param_value
-            current_sorter_param[0]['sorting_param'][event[1]] = tuple(current_sorter_param[0]['sorting_param'][event[1]])
-        else:
-            try:
-                if '.' or ',' in values[event]:
-                    param_to_convert = values[event].replace(',', '.')
-                    param_value = float(param_to_convert)
-                else:
-                    param_value = int(values[event])
-            except ValueError:
-                pass
+    if values[event] == 'None' or '':
+        param_value = None
+    elif values[event] == 'True':
+        param_value = True
+    elif values[event] == 'False':
+        param_value = False
+    else:
+        param_value = values[event]
+    
+    if isinstance(event, tuple):
+        try:
+            if '.' or ',' in values[event]:
+                param_to_convert = values[event].replace(',', '.')
+                param_value = float(param_to_convert)
+            else:
+                param_value = int(values[event])
+        except ValueError:
+            pass
             
-            current_sorter_param[0]['sorting_param'][event] = param_value
-        print(param_value, type(param_value))
-    except:
-        print(current_sorter_param[0]['sorting_param'])
+        current_sorter_param[0]['sorting_param'][event[1]] = list(current_sorter_param[0]['sorting_param'][event[1]])
+        current_sorter_param[0]['sorting_param'][event[1]][event[0]] = param_value
+        current_sorter_param[0]['sorting_param'][event[1]] = tuple(current_sorter_param[0]['sorting_param'][event[1]])
+    else:
+        try:
+            if '.' or ',' in values[event]:
+                param_to_convert = values[event].replace(',', '.')
+                param_value = float(param_to_convert)
+            else:
+                param_value = int(values[event])
+        except ValueError:
+            pass
+        
+        current_sorter_param[0]['sorting_param'][event] = param_value
