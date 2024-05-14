@@ -5,7 +5,7 @@ Created on Mon May 13 15:24:47 2024
 @author: _LMT
 """
 from GUIs.sorter_params_GUI import make_sorter_param_dict, sorting_param_event_handler, configure_sorter_param
-from GUIs.custom_cleaning_GUI import make_config_custom_cleaning_param_window, custom_cleaning_event_handler
+from GUIs.custom_cleaning_GUI import make_config_custom_cleaning_param_window, custom_cleaning_event_handler, default_custom_cleaning_parameters_dict
 import PySimpleGUI as sg
 import time
 
@@ -84,12 +84,11 @@ def main_gui_maker(main_window, state, current_sorter_param, ephy_extension_dict
             break
         
         if event == sg.WIN_CLOSED:
-            window.close()
             if window == config_sorter_param_window:
                 config_sorter_param_window = None
             elif window == config_custom_cleaning_param_window:
                 config_custom_cleaning_param_window = None
-            elif window == main_window[0]:
+            if window == main_window[0]:
                 try:
                     config_sorter_param_window.close()
                 except AttributeError:
@@ -99,6 +98,7 @@ def main_gui_maker(main_window, state, current_sorter_param, ephy_extension_dict
                 except AttributeError:
                     pass
                 state[0] = 'stop'
+                window.close()
                 break
             
         if event == 'sorter_combo':
@@ -109,8 +109,10 @@ def main_gui_maker(main_window, state, current_sorter_param, ephy_extension_dict
         if event == 'custom_cleaning_checkbox':
             if values['custom_cleaning_checkbox']:
                 main_window[0]['custom_cleaning_button'].update(visible=True)
+                current_sorter_param[0]['custom_cleaning_param'] = default_custom_cleaning_parameters_dict
             else:
                 main_window[0]['custom_cleaning_button'].update(visible=False)
+                del current_sorter_param[0]['custom_cleaning_param']
                 
         if event == 'manual_curation_checkbox':
             if values['manual_curation_checkbox']:
@@ -119,10 +121,10 @@ def main_gui_maker(main_window, state, current_sorter_param, ephy_extension_dict
                 main_window[0]['manual_cleaning_input_column'].update(visible=False)
         
         if event == 'custom_cleaning_button':
-            config_custom_cleaning_param_window = make_config_custom_cleaning_param_window()
+            config_custom_cleaning_param_window = make_config_custom_cleaning_param_window(current_sorter_param[0]['custom_cleaning_param'])
         
         if window == config_custom_cleaning_param_window:
-            custom_cleaning_event_handler(window, values, event)
+            custom_cleaning_event_handler(window, values, event, current_sorter_param)
         
         if event == 'sorter_param_button':
             if values['sorter_combo'] == '':
