@@ -127,16 +127,16 @@ def plot_summary_for_unit(unit_id, analyzer, sorter_name, delay, mouse, ylim=Non
     sw.plot_unit_waveforms_density_map(analyzer, unit_ids=[unit_id], ax=ax2)
     if ylim is not None:
         ax2.set_ylim(ylim)
-    template = analyzer.get_template(unit_id=unit_id).copy()
+    template = get_template_amplitudes(analyzer)[unit_id].copy()
     for curent_ax in [
                       ax3, 
                       ax4, 
                       ]:
         max_channel = np.argmax(np.abs(template))%template.shape[1]
         template[:,max_channel] = 0
-        mean_residual = np.mean(np.abs((analyzer.get_waveforms(unit_id=unit_id)[:,:,max_channel] - analyzer.get_template(unit_id=unit_id)[:,max_channel])), axis=0)
+        mean_residual = np.mean(np.abs((analyzer.get_waveforms(unit_id=unit_id)[:,:,max_channel] - get_template_amplitudes(analyzer)[unit_id][:,max_channel])), axis=0)
         curent_ax.plot(mean_residual)
-        curent_ax.plot(analyzer.get_template(unit_id=unit_id)[:,max_channel])
+        curent_ax.plot(get_template_amplitudes(analyzer)[unit_id][:,max_channel])
         curent_ax.set_title('Mean residual of the waveform for channel '+str(max_channel))
         if ylim is not None:
             curent_ax.set_ylim(ylim)
