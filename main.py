@@ -7,11 +7,14 @@ Created on Tue May  7 10:26:45 2024
 import spikeinterface.extractors as se
 import spikeinterface.sorters as ss
 import spikeinterface.preprocessing as spre
-from spikeinterface.core import create_sorting_analyzer, load_sorting_analyzer
+from spikeinterface.core import create_sorting_analyzer
 import probeinterface as pi
 
 import threading
 import time
+import traceback
+import json
+import datetime
 
 from plotting.plot_unit_summary import plot_sorting_summary
 from curation.clean_unit import clean_unit
@@ -21,16 +24,26 @@ from GUIs.Main_GUI import main_gui_maker, led_loading_animation, SetLED, trigger
 ephy_extension_dict = {'rhd': lambda x:se.read_intan(x, stream_id='0'),
                        }
 
+default_param = {}
+
 
 def launch_sorting(current_sorter_param, main_window, state, recording, sorter, analyser):
+    
     try:
-                
+        
+        save_extention = True
+        
         led_loading_animation_thread = threading.Thread(target=led_loading_animation, args=(state, main_window))
         led_loading_animation_thread.start()
+        
+        current_time = datetime.datetime.now()
+
+        current_sorter_param[0]['time of analysis'] = current_time.strftime("%Y-%m-%d %H:%M:%S")
         
         #############################################
         ############## BandPass filter ##############
         if current_sorter_param[0]['bandpass'][0]:
+            print('bandpass')
             state[0] = 'bandpass'
             recording[0] = spre.bandpass_filter(recording[0], freq_min=int(current_sorter_param[0]['bandpass'][1]), freq_max=int(current_sorter_param[0]['bandpass'][2]))
             SetLED(main_window, 'led_bandpass', 'green')
@@ -39,6 +52,7 @@ def launch_sorting(current_sorter_param, main_window, state, recording, sorter, 
         #############################################
         ############# Comon ref removal #############
         if current_sorter_param[0]['comon_ref']:
+            print('comon_ref')
             state[0] = 'comon_ref'
             recording[0] = spre.common_reference(recording[0], reference='global', operator='median')
             SetLED(main_window, 'led_comon_ref', 'green')
@@ -48,6 +62,7 @@ def launch_sorting(current_sorter_param, main_window, state, recording, sorter, 
         #############################################
         ############# Probe assignement #############
         if current_sorter_param[0]['probe_assign']:
+            print('probe_assign')
             probe = pi.io.read_probeinterface(current_sorter_param[0]['probe_file_path'])
             probe = probe.probes[0]
             recording[0] = recording[0].set_probe(probe)
@@ -69,10 +84,14 @@ def launch_sorting(current_sorter_param, main_window, state, recording, sorter, 
                                                    folder=f"{current_sorter_param[0]['output_folder_path']}/{current_sorter_param[0]['name']}/base sorting/SortingAnalyzer", 
                                                    )
             plot_sorting_summary(analyser[0], 
-                                 current_sorter_param[0]['name'], None, '', 
+                                 current_sorter_param[0]['name'], 
+                                 save_extention=save_extention,
                                  save_path=f"{current_sorter_param[0]['output_folder_path']}/{current_sorter_param[0]['name']}/base sorting", 
                                  trial_len=recording[0].get_duration(), 
                                  acelerate=False,)
+            with open(f"{current_sorter_param[0]['output_folder_path']}/{current_sorter_param[0]['name']}/base sorting/pipeline_param.json", "w") as outfile: 
+                json.dump(current_sorter_param[0], outfile)
+                
             SetLED(main_window, 'led_sorting', 'green')
         #############################################
         
@@ -86,10 +105,16 @@ def launch_sorting(current_sorter_param, main_window, state, recording, sorter, 
                             sorter_name=current_sorter_param[0]['name'], 
                             save_plot=f"{current_sorter_param[0]['output_folder_path']}/{current_sorter_param[0]['name']}/custom cleaning") 
             
-            plot_sorting_summary(analyser[0], current_sorter_param[0]['name'], 
-                                 None, '', 
+            plot_sorting_summary(analyser[0], 
+                                 current_sorter_param[0]['name'], 
+                                 save_extention=save_extention,
                                  save_path=f"{current_sorter_param[0]['output_folder_path']}/{current_sorter_param[0]['name']}/custom cleaning", 
-                                 trial_len=recording[0].get_duration(), acelerate=False)
+                                 trial_len=recording[0].get_duration(), 
+                                 acelerate=False,)
+            
+            with open(f"{current_sorter_param[0]['output_folder_path']}/{current_sorter_param[0]['name']}/custom cleaning/pipeline_param.json", "w") as outfile: 
+                json.dump(current_sorter_param[0], outfile)
+            
             SetLED(main_window, 'led_Custom', 'green')
         #############################################
         
@@ -107,17 +132,20 @@ def launch_sorting(current_sorter_param, main_window, state, recording, sorter, 
                                                                              mouse='', 
                                                                              trial_len=recording[0].get_duration()
                                                                              )
+            with open(f"{current_sorter_param[0]['output_folder_path']}/{current_sorter_param[0]['name']}/manual curation/pipeline_param.json", "w") as outfile: 
+                json.dump(current_sorter_param[0], outfile)
+            
             SetLED(main_window, 'led_Manual', 'green')
         #############################################
-        
         state[0] = None
-    except Exception as e:
+        
+    except:
         print('\n')
-        print(e)
+        traceback.print_exc()
         if state[0] is not None:
             SetLED(main_window, f'led_{state[0]}', 'orange')
         state[0] = None
-
+        
 def sorting_main():
     
     state = [None]
@@ -141,12 +169,13 @@ def sorting_main():
         main_window[0]['launch_sorting_button'].update('Sorting in porgress')
         main_window[0]['launch_sorting_button'].update(disabled=True)
         
-        recording[0] = current_sorter_param[0]['ephy_file_reading_function'](current_sorter_param[0]['ephy_file_path'])
+        recording[0] = ephy_extension_dict[current_sorter_param[0]['ephy_file_extension']](current_sorter_param[0]['ephy_file_path'])
         
         launch_sorting(current_sorter_param, main_window, state, recording, sorter, analyser)
         
         main_window[0]['launch_sorting_button'].update('Launch Sorting')
         main_window[0]['launch_sorting_button'].update(disabled=False)
+        
 
 if __name__ == "__main__":
     sorting_main()

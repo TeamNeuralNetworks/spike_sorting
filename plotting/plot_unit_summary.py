@@ -12,7 +12,8 @@ from elephant import statistics, kernels
 from elephant.statistics import time_histogram
 from neo.core import SpikeTrain
 import spikeinterface.widgets as sw
-from spikeinterface.core.template_tools import  get_template_amplitudes
+from spikeinterface.core import get_template_amplitudes
+
 
 from quantities import s, ms
 import numpy as np
@@ -26,18 +27,20 @@ import quantities as pq
 
 from curation.clean_unit import get_highest_amplitude_channel
 
-def plot_sorting_summary(analyzer, sorter_name, delay, mouse, save_path=None, trial_len=9, acelerate=True):
-    analyzer.compute(['random_spikes', 'waveforms', 'templates'])
+def plot_sorting_summary(analyzer, sorter_name, save_extention=False, save_path=None, trial_len=9, acelerate=True):
+    analyzer.compute(['random_spikes', 'waveforms', 'templates'], save=save_extention)
     spost.compute_spike_locations(analyzer)
     
     max_unit_amplitude = 0
     min_unit_amplitude = 0
-    for template_amplitude in get_template_amplitudes(analyzer).values():
-        current_max_amplitude = template_amplitude.max()
+    
+    for unit_id, template in get_template_amplitudes(analyzer, peak_sign='pos').items():
+        current_max_amplitude = template.max()
         if current_max_amplitude > max_unit_amplitude:
             max_unit_amplitude = current_max_amplitude
-         
-        current_min_amplitude = template_amplitude.min()
+            
+    for unit_id, template in get_template_amplitudes(analyzer, peak_sign='neg').items():
+        current_min_amplitude = -1*template.max()
         if current_min_amplitude < min_unit_amplitude:
             min_unit_amplitude = current_min_amplitude
             
@@ -50,22 +53,22 @@ def plot_sorting_summary(analyzer, sorter_name, delay, mouse, save_path=None, tr
     
     for unit_id in analyzer.unit_ids:
         if acelerate:
-            pool.apply_async(plot_summary_for_unit, (unit_id, analyzer, sorter_name, delay, mouse, ylim, None, save_path, trial_len))
+            pool.apply_async(plot_summary_for_unit, (unit_id, analyzer, sorter_name, ylim, None, save_path, trial_len))
         else:
-            plot_summary_for_unit(unit_id, analyzer, sorter_name, delay, mouse, ylim, None, save_path, trial_len)
+            plot_summary_for_unit(unit_id, analyzer, sorter_name, ylim, None, save_path, trial_len)
 
     if acelerate:
         # Close the pool and wait for all processes to finish
         pool.close()
         pool.join()
 
-def plot_summary_for_unit(unit_id, analyzer, sorter_name, delay, mouse, ylim=None, unit_for_plot_name=None, save_path=None, trial_len=9):
-    
+def plot_summary_for_unit(unit_id, analyzer, sorter_name, ylim=None, unit_for_plot_name=None, save_path=None, trial_len=9):
+        
     unit_for_plot_name = unit_id if unit_for_plot_name is None else unit_for_plot_name
     
     fig = plt.figure(figsize=(30, 13))
     gs = GridSpec(nrows=3, ncols=7)
-    fig.suptitle(f'{sorter_name}\n{mouse} {delay}\nunits {unit_for_plot_name} (Total spike {analyzer.sorting.get_total_num_spikes()[unit_id]})',)
+    fig.suptitle(f'{sorter_name}\nunits {unit_for_plot_name} (Total spike {analyzer.sorting.get_total_num_spikes()[unit_id]})',)
     ax0 = fig.add_subplot(gs[0, 0:2])
     ax1 = fig.add_subplot(gs[0, 2:4])
     ax1.set_title('Mean firing rate during a trial')
@@ -101,6 +104,7 @@ def plot_summary_for_unit(unit_id, analyzer, sorter_name, delay, mouse, ylim=Non
     rates = statistics.instantaneous_rate(current_spike_train_list,
                                         sampling_period=50 * pq.ms,
                                         kernel=kernel)
+    
     edge_effect_bin = math.ceil(100/50)
     time_map = np.arange(0, trial_len, 0.05)
     rates = np.array(rates)
@@ -127,26 +131,27 @@ def plot_summary_for_unit(unit_id, analyzer, sorter_name, delay, mouse, ylim=Non
     sw.plot_unit_waveforms_density_map(analyzer, unit_ids=[unit_id], ax=ax2)
     if ylim is not None:
         ax2.set_ylim(ylim)
-    template = get_template_amplitudes(analyzer)[unit_id].copy()
+        
+    template = get_template_amplitudes(analyzer)[unit_id]
     for curent_ax in [
                       ax3, 
                       ax4, 
                       ]:
-        max_channel = np.argmax(np.abs(template))%template.shape[1]
-        template[:,max_channel] = 0
-        mean_residual = np.mean(np.abs((analyzer.get_waveforms(unit_id=unit_id)[:,:,max_channel] - get_template_amplitudes(analyzer)[unit_id][:,max_channel])), axis=0)
+        max_channel = np.argmax(template)
+        template[max_channel] = 0
+        current_channel_waveform = analyzer.get_extension('waveforms').get_waveforms_one_unit(unit_id=unit_id, force_dense=True)[:,:,max_channel]
+        mean_residual = np.mean(np.abs((current_channel_waveform - current_channel_waveform.mean(axis=0))), axis=0)
+
         curent_ax.plot(mean_residual)
-        curent_ax.plot(get_template_amplitudes(analyzer)[unit_id][:,max_channel])
-        curent_ax.set_title('Mean residual of the waveform for channel '+str(max_channel))
+        curent_ax.set_title('Mean residual of the waveform for channel '+str(analyzer.channel_ids[max_channel]))
         if ylim is not None:
             curent_ax.set_ylim(ylim)
     
-    
-    waveform = analyzer.get_waveforms(unit_id=unit_id)
+    waveform = analyzer.get_extension('waveforms').get_waveforms_one_unit(unit_id=unit_id, force_dense=True)
     waveform = get_highest_amplitude_channel(waveform).T
     ax5.plot(waveform, alpha=0.1, color='b')
     ax5.plot(np.median(waveform, axis=1), color='r', alpha=1)
-    ax5.set_title('Waveform of all spike')
+    ax5.set_title('Waveform of all spike (at max channel)')
     plt.tight_layout()
 
     rasterplot_rates(current_spike_train_list, ax=ax6, histscale=0.1)
@@ -159,3 +164,4 @@ def plot_summary_for_unit(unit_id, analyzer, sorter_name, delay, mouse, ylim=Non
             os.makedirs(fr'{save_path}\Unit_summary_plot\png_version')
         plt.savefig(fr'{save_path}\Unit_summary_plot\png_version\Unit_{int(unit_for_plot_name)}.png')
         plt.close()
+        

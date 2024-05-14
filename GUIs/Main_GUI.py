@@ -4,8 +4,7 @@ Created on Mon May 13 15:24:47 2024
 
 @author: _LMT
 """
-import spikeinterface as si  # import core only
-import spikeinterface.extractors as se
+from spikeinterface.core import load_sorting_analyzer
 
 from GUIs.sorter_params_GUI import make_sorter_param_dict, sorting_param_event_handler, configure_sorter_param
 from GUIs.custom_cleaning_GUI import make_config_custom_cleaning_param_window, custom_cleaning_event_handler, default_custom_cleaning_parameters_dict
@@ -14,6 +13,7 @@ import time
 import tkinter as tk
 from tkinter import filedialog
 import os
+import json
 
 def trigger_popup_error(message):
     sg.popup_error(message)
@@ -50,33 +50,81 @@ def select_folder():
     else:
         return None
 
-def load_analysis(window, recording, sorter, analyser, current_sorter_param):
+def load_analysis(window, recording, sorter, analyzer, current_sorter_param):
     path = select_folder()
     if path is not None:
         folder_list = os.listdir(path)
-        if 'base sorting' in folder_list:
-           SetLED(window, 'led_bandpass', 'green')
-           SetLED(window, 'led_comon_ref', 'green')
-           SetLED(window, 'led_sorting', 'green')
-           
-           sorter[0] = se.NpzSortingExtractor.load_from_folder(fr'{path}\base sorting\in_container_sorting')
-           recording[0] = analyser[0].recording()
-           sorter_name = analyser[0].get_sorting_property()
-           current_sorter_param[0]['probe_assign'] = False
-           current_sorter_param[0]['sorting'] = False
-           current_sorter_param[0]['bandpass'][0] = False
-           current_sorter_param[0]['comon_ref'] = False
-        # if 'custom cleaning' in folder_list:
-        #     SetLED(window, 'led_bandpass', 'green')
-        #     SetLED(window, 'led_comon_ref', 'green')
-        #     SetLED(window, 'led_Custom', 'green')
-        # if 'manual curation' in folder_list:
-        #     SetLED(window, 'led_bandpass', 'green')
-        #     SetLED(window, 'led_comon_ref', 'green')
-        #     SetLED(window, 'led_Manual', 'green')
+        if 'manual curation' in folder_list or os.path.basename(path) == 'manual curation':
+            mode = 'manual curation'
+            if 'manual curation' in folder_list:
+                path = fr'{path}\{mode}'
+        elif 'custom cleaning' in folder_list or os.path.basename(path) == 'custom cleaning':
+            mode = 'custom cleaning'
+            if 'custom cleaning' in folder_list:
+                path = fr'{path}\{mode}'
+
+        elif 'base sorting' in folder_list or os.path.basename(path) == 'base sorting':
+            mode = 'base sorting'
+            if 'base sorting' in folder_list:
+                path = fr'{path}\{mode}'
+        else:
+            sg.popup_error('No anlysis pipeline find')
+            return 
+        
+        analyzer[0] = load_sorting_analyzer(folder=fr'{path}\SortingAnalyzer')
+        sorter[0] = analyzer[0].sorting
+        recording[0] = analyzer[0].recording
+        with open(fr'{path}/pipeline_param.json', 'r') as file:
+             current_sorter_param[0] = json.load(file)
+        
+        current_sorter_param[0]['from_loading'] = True
+        
+        window[0]['Load_ephy_file'].update(button_color='green')
+        window[0]['Load_probe_file'].update(button_color='green')
+        window[0]['Load_probe_file'].update(disabled=True)
+        window[0]['Select_output_folder'].update(button_color='green')
+        window[0]['sorter_param_button'].update(button_color='green')
+        window[0]['sorter_param_button'].update(disabled=True)
         
         
         
+        window[0]['bandpass_checkbox'].update(disabled=True)
+        window[0]['high_bandpass_input'].update(disabled=True)
+        window[0]['low_bandpass_input'].update(disabled=True)
+        if current_sorter_param[0]['bandpass'][0]:
+            SetLED(window, 'led_bandpass', 'green')
+            window[0]['low_bandpass_input'].update(current_sorter_param[0]['bandpass'][1])
+            window[0]['high_bandpass_input'].update(current_sorter_param[0]['bandpass'][2])
+            window[0]['bandpass_checkbox'].update(True)
+        else:
+            SetLED(window, 'led_bandpass', 'red')
+            window[0]['bandpass_checkbox'].update(False)
+        current_sorter_param[0]['bandpass'][0] = False
+        
+        
+        window[0]['comon_ref_checkbox'].update(disabled=True)
+        if current_sorter_param[0]['comon_ref']:
+            window[0]['comon_ref_checkbox'].update(True)
+            SetLED(window, 'led_comon_ref', 'green')
+        else:
+            window[0]['comon_ref_checkbox'].update(False)
+            SetLED(window, 'led_comon_ref', 'red')
+        current_sorter_param[0]['comon_ref'] = False
+
+        current_sorter_param[0]['probe_assign'] = False
+        
+        SetLED(window, 'led_sorting', 'green')
+        current_sorter_param[0]['sorting'] = False
+        window[0]['sorter_combo'].update(value=current_sorter_param[0]['name'])
+        window[0]['sorter_combo'].update(disabled=True)
+        
+        if mode == 'custom cleaning' or mode == 'manual curation':
+            SetLED(window, 'led_Custom', 'green')
+            current_sorter_param[0]['custom_cleaning'] = False
+            if mode == 'manual curation':
+                SetLED(window, 'led_Manual', 'green')
+                current_sorter_param[0]['manual_curation'] = False
+  
 def make_window():
     
     sorter_param_dict =  make_sorter_param_dict()
@@ -104,7 +152,7 @@ def make_window():
     
     return sg.Window('Spike sorting GUI', layout, finalize=True), sorter_param_dict
    
-def main_gui_maker(main_window, state, current_sorter_param, ephy_extension_dict, recording, sorter, analyser):
+def main_gui_maker(main_window, state, current_sorter_param, ephy_extension_dict, recording, sorter, analyzer):
    sg.theme('DarkBlue')
    main_window[0], sorter_param_dict = make_window()
    SetLED(main_window, 'led_bandpass', 'red')
@@ -116,7 +164,6 @@ def main_gui_maker(main_window, state, current_sorter_param, ephy_extension_dict
    config_sorter_param_window = None
    config_custom_cleaning_param_window = None
    while True:
-       
         window, event, values = sg.read_all_windows()
         
         if state[0] == 'stop':
@@ -158,16 +205,40 @@ def main_gui_maker(main_window, state, current_sorter_param, ephy_extension_dict
                     break
             
             if event == 'Load analysis':
-                load_analysis(window, recording, sorter, analyser, current_sorter_param)
+                load_analysis(main_window, recording, sorter, analyzer, current_sorter_param)
 
             if event == 'ephy_file_input':
                 if values['ephy_file_input'].split('.')[-1] not in ephy_extension_dict.keys():
                     sg.popup_error(f"Unsuported ephy file format: {values['ephy_file_input'].split('.')[-1]}")
-                    main_window[0]['Load_ephy_file'].update(button_color='red')
+                    if not current_sorter_param[0]['from_loading']:
+                        main_window[0]['Load_ephy_file'].update(button_color='red')
                 else:
-                    current_sorter_param[0]['ephy_file_reading_function'] = ephy_extension_dict[values['ephy_file_input'].split('.')[-1]]
+                    current_sorter_param[0]['ephy_file_extension'] = values['ephy_file_input'].split('.')[-1]
                     current_sorter_param[0]['ephy_file_path'] = values['ephy_file_input'] 
                     main_window[0]['Load_ephy_file'].update(button_color='green')
+                    if current_sorter_param[0]['from_loading']:
+                        main_window[0]['comon_ref_checkbox'].update(disabled=False)
+                        main_window[0]['bandpass_checkbox'].update(disabled=False)
+                        main_window[0]['bandpass_checkbox'].update(disabled=False)
+                        main_window[0]['high_bandpass_input'].update(disabled=False)
+                        main_window[0]['low_bandpass_input'].update(disabled=False)
+                        main_window[0]['sorter_param_button'].update(disabled=False)
+                        main_window[0]['Load_probe_file'].update(disabled=False)
+                        main_window[0]['Load_probe_file'].update(button_color='red')
+                        main_window[0]['Select_output_folder'].update(button_color='red')
+                        main_window[0]['sorter_param_button'].update(button_color='red')
+                        main_window[0]['sorter_combo'].update(disabled=False)
+                        main_window[0]['sorter_combo'].update('')
+                        SetLED(main_window, 'led_bandpass', 'red')
+                        SetLED(main_window, 'led_comon_ref', 'red')
+                        SetLED(main_window, 'led_sorting', 'red')
+                        SetLED(main_window, 'led_Custom', 'red')
+                        SetLED(main_window, 'led_Manual', 'red')
+                        del current_sorter_param[0]['probe_file_path'], current_sorter_param[0]['output_folder_path'], current_sorter_param[0]['name']
+                    
+                    current_sorter_param[0]['from_loading'] = False
+                    
+                    
                     
             if event == 'probe_file_input':
                 if values['probe_file_input'].split('.')[-1] != 'json':
@@ -213,11 +284,7 @@ def main_gui_maker(main_window, state, current_sorter_param, ephy_extension_dict
                     main_window[0]['manual_cleaning_input_column'].update(visible=False)
 
             if event == 'launch_sorting_button':
-                SetLED(main_window, 'led_bandpass', 'red')
-                SetLED(main_window, 'led_comon_ref', 'red')
-                SetLED(main_window, 'led_sorting', 'red')
-                SetLED(main_window, 'led_Custom', 'red')
-                SetLED(main_window, 'led_Manual', 'red')
+                
                 if 'name' not in current_sorter_param[0].keys():
                     sg.popup_error('Please select a sorter')
                 elif 'ephy_file_path' not in current_sorter_param[0].keys():
@@ -227,12 +294,18 @@ def main_gui_maker(main_window, state, current_sorter_param, ephy_extension_dict
                 elif 'output_folder_path' not in current_sorter_param[0].keys():
                     sg.popup_error('Please select a output folder')
                 else:
-                    current_sorter_param[0]['bandpass'] = [values['bandpass_checkbox'], values['low_bandpass_input'], values['high_bandpass_input']]
-                    current_sorter_param[0]['comon_ref'] = values['comon_ref_checkbox']
+                    if not current_sorter_param[0]['from_loading']:
+                        SetLED(main_window, 'led_bandpass', 'red')
+                        SetLED(main_window, 'led_comon_ref', 'red')
+                        SetLED(main_window, 'led_sorting', 'red')
+                        SetLED(main_window, 'led_Custom', 'red')
+                        SetLED(main_window, 'led_Manual', 'red')
+                        current_sorter_param[0]['bandpass'] = [values['bandpass_checkbox'], values['low_bandpass_input'], values['high_bandpass_input']]
+                        current_sorter_param[0]['comon_ref'] = values['comon_ref_checkbox']
                     current_sorter_param[0]['custom_cleaning'] = values['custom_cleaning_checkbox']
                     current_sorter_param[0]['manual_curation'] = values['manual_curation_checkbox']
                     state[0] = 'launch'
             
             if event == 'debug_button':
                 print('\n')
-                print(sorter[0], analyser[0], recording[0])
+                print(sorter[0], analyzer[0], recording[0])
