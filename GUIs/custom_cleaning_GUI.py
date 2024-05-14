@@ -74,9 +74,10 @@ def save_custom_cleaning_parameters(window):
                 current_param_value = True
             elif current_param_value == 'False':
                 current_param_value = False
-            else:
+            
+            if not isinstance(current_param_value, bool) and current_param_value is not None:
                 try:
-                    if '.' or ',' in current_param_value:
+                    if '.' in current_param_value or ',' in current_param_value:
                         param_to_convert = current_param_value.replace(',', '.')
                         current_param_value = float(param_to_convert)
                     else:
@@ -93,12 +94,9 @@ def custom_cleaning_event_handler(window, values, event, current_sorter_param):
         current_param = save_custom_cleaning_parameters(window)
         if current_param != current_sorter_param[0]['custom_cleaning_param']:
             save_changes_answer = sg.popup_yes_no('Save changes?')
-            if save_changes_answer:
+            if save_changes_answer == 'Yes':
                 current_sorter_param[0]['custom_cleaning_param'] = current_param
-            else:
-                window.close()
-        else:
-            window.close()
+        window.close()
         
     if event == 'save_custom_cleaning_param_button':
         current_sorter_param[0]['custom_cleaning_param'] = save_custom_cleaning_parameters(window)
@@ -107,4 +105,4 @@ def custom_cleaning_event_handler(window, values, event, current_sorter_param):
     if event == 'reset_custom_cleaning_param_button':
         for main_param_name, main_param_dict in default_custom_cleaning_parameters_dict.items():
             for param_name, param_value in main_param_dict.items():
-                window[(main_param_name, param_name)].update(param_value)
+                window[(main_param_name, param_name)].update(str(param_value))

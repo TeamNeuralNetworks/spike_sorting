@@ -110,39 +110,37 @@ def remove_big_artefact(recording, we, cs, df_cleaning_summary, thr, method='mad
         
     return clean_we, df_cleaning_summary
 
-def remove_edge_artefact(recording, we, cs, df_cleaning_summary, df_real_time, save_folder=None):
+def remove_edge_artefact(recording, we, cs, df_cleaning_summary, df_real_time, save_folder=None, lenght_to_remove=7, trial_length=None):
     
     new_df_row_list = []
     for unit_id in tqdm(we.sorting.get_unit_ids(), desc='Remove edge artefact'):
         spikes = we.sorting.get_unit_spike_train(unit_id=unit_id)
-        spikes_indx = np.arange(0, len(spikes), 1)
-        #taking care of artefact cause by edge effect of start and stop of recording every trial
-        spikes_edge_filter = df_real_time.loc[spikes]
-        spikes_edge_filter['spike_indx'] = spikes_indx
         
-        spikes_edge_filter = spikes_edge_filter[(spikes_edge_filter['time'] > 0.007) & (spikes_edge_filter['time'] < 8.997)]
+        if trial_length is None:
+            len_recording = recording.get_duration()
+            
         
-        spikes_indx = spikes_edge_filter['spike_indx'].tolist()
+        # spikes_indx = spikes_edge_filter['spike_indx'].tolist()
         
         mask = np.zeros(len(spikes), dtype=bool)
-        mask[spikes_indx] = True
-        cs, new_unit_id_list = perform_split(cs, unit_id, mask, remove_first_index_unit=True) #artefact are label False and will be the first unit formed
-        for new_unit_id in new_unit_id_list:
-            current_unit_df_cleaning_summary = df_cleaning_summary[df_cleaning_summary[df_cleaning_summary.columns[-1]] == unit_id]
-            assert len(current_unit_df_cleaning_summary) == 1, "there cannot be two unit with the same id"
-            new_df = current_unit_df_cleaning_summary.copy()
-            new_df['Remove edge artefact'] = [new_unit_id]
-            new_df_row_list.append(new_df)
+    #     mask[spikes_indx] = True
+    #     cs, new_unit_id_list = perform_split(cs, unit_id, mask, remove_first_index_unit=True) #artefact are label False and will be the first unit formed
+    #     for new_unit_id in new_unit_id_list:
+    #         current_unit_df_cleaning_summary = df_cleaning_summary[df_cleaning_summary[df_cleaning_summary.columns[-1]] == unit_id]
+    #         assert len(current_unit_df_cleaning_summary) == 1, "there cannot be two unit with the same id"
+    #         new_df = current_unit_df_cleaning_summary.copy()
+    #         new_df['Remove edge artefact'] = [new_unit_id]
+    #         new_df_row_list.append(new_df)
    
-    df_cleaning_summary = pd.concat(new_df_row_list)
-    clean_sorting = cs.sorting
-    if save_folder is not None:
-        clean_we = si.extract_waveforms(recording, clean_sorting, max_spikes_per_unit=None, folder=f'{save_folder}/we', overwrite=True)
-        clean_sorting.save(folder=f'{save_folder}/sorter')
-    else:
-        clean_we = si.extract_waveforms(recording, clean_sorting, max_spikes_per_unit=None, mode='memory')
+    # df_cleaning_summary = pd.concat(new_df_row_list)
+    # clean_sorting = cs.sorting
+    # if save_folder is not None:
+    #     clean_we = si.extract_waveforms(recording, clean_sorting, max_spikes_per_unit=None, folder=f'{save_folder}/we', overwrite=True)
+    #     clean_sorting.save(folder=f'{save_folder}/sorter')
+    # else:
+    #     clean_we = si.extract_waveforms(recording, clean_sorting, max_spikes_per_unit=None, mode='memory')
 
-    return clean_we, df_cleaning_summary
+    # return clean_we, df_cleaning_summary
 
 def split_noise_from_unit(recording, we, cs, df_cleaning_summary, min_spike_per_unit=50, 
                           min_silhouette_score_for_splitting=0.2, max_number_of_split=10, 
@@ -400,9 +398,8 @@ def save_temp_file(temp_file_path, we=None, df_cleaning_summary=None, plot_data_
         with open(f'{temp_file_path}\{file_name_to_save}.pkl', 'wb') as file:
             pickle.dump(file_to_save, file)
             
-def clean_unit(sorter, recording, df_real_time=None, 
-               save_folder=None, delay=None, mouse=None, 
-               sorter_name=None, plot=False, save_plot=None):  
+def clean_unit(sorter, recording, cleaning_param, save_folder=None, sorter_name=None, save_plot=None, *args): 
+    
     temp_file_path = f'{save_folder}/splitting_temp_file'
     if not os.path.isdir(temp_file_path):
         os.makedirs(temp_file_path)
@@ -417,7 +414,7 @@ def clean_unit(sorter, recording, df_real_time=None,
         we = si.extract_waveforms(recording, sorter, max_spikes_per_unit=None, mode='memory')
         cs = CurationSorting(parent_sorting=we.sorting)
         df_cleaning_summary = pd.DataFrame({'unfilter': we.sorting.get_unit_ids()})
-        if plot:
+        if cleaning_param['plot_cleaning_summary']['activate']:
             #plot_data_dict is used to store the waveform of each step of cleaning for the different units
             #df_cleaning_summary will be used to keep track of the change of id each unit had at every step of the cleaning
             plot_data_dict_maker('Before cleaning', 'unfilter', we, 'r', temp_file_path)
@@ -426,10 +423,11 @@ def clean_unit(sorter, recording, df_real_time=None,
         print('Loading from files')
     print('##############################################')
     
-    if df_real_time is not None:
+    if cleaning_param['remove_edge_artefact']['activate']:
         print('\n########### Remove edge artefact #############')
         if df_cleaning_summary is None or 'Remove edge artefact' not in df_cleaning_summary.columns:
-            we, df_cleaning_summary = remove_edge_artefact(recording, we, cs, df_cleaning_summary, df_real_time)
+            we, df_cleaning_summary = remove_edge_artefact(recording, we, cs, df_cleaning_summary, 
+                                                           **cleaning_param['remove_edge_artefact'])
             cs = CurationSorting(parent_sorting=we.sorting)
             save_temp_file(temp_file_path, we=we, df_cleaning_summary=df_cleaning_summary)
         else:
@@ -437,58 +435,58 @@ def clean_unit(sorter, recording, df_real_time=None,
         print('##############################################')
     
     
-    print('\n############ Remove big artefact #############')
-    if df_cleaning_summary is None or 'Remove big artefact' not in df_cleaning_summary.columns:
-        we, df_cleaning_summary = remove_big_artefact(recording, we, cs, df_cleaning_summary, thr=15, method='mad')
-        cs = CurationSorting(parent_sorting=we.sorting)
-        if plot:
-            plot_data_dict_maker('After cleaning', 'Remove big artefact', we, 'g', temp_file_path)
-        save_temp_file(temp_file_path, we=we, df_cleaning_summary=df_cleaning_summary)
-    else:
-        print('Loading from files')
-    print('##############################################')
+    # print('\n############ Remove big artefact #############')
+    # if df_cleaning_summary is None or 'Remove big artefact' not in df_cleaning_summary.columns:
+    #     we, df_cleaning_summary = remove_big_artefact(recording, we, cs, df_cleaning_summary, thr=15, method='mad')
+    #     cs = CurationSorting(parent_sorting=we.sorting)
+    #     if plot:
+    #         plot_data_dict_maker('After cleaning', 'Remove big artefact', we, 'g', temp_file_path)
+    #     save_temp_file(temp_file_path, we=we, df_cleaning_summary=df_cleaning_summary)
+    # else:
+    #     print('Loading from files')
+    # print('##############################################')
     
     
-    print('\n############# Align spikes ###################')
-    if df_cleaning_summary is None or 'Align spikes' not in df_cleaning_summary.columns:
-        we, df_cleaning_summary = align_spike(we, recording, df_cleaning_summary, save_folder=None)
-        cs = CurationSorting(parent_sorting=we.sorting)
-        save_temp_file(temp_file_path, we=we, df_cleaning_summary=df_cleaning_summary)
-    else:
-        print('Loading from files')
-    print('##############################################')
+    # print('\n############# Align spikes ###################')
+    # if df_cleaning_summary is None or 'Align spikes' not in df_cleaning_summary.columns:
+    #     we, df_cleaning_summary = align_spike(we, recording, df_cleaning_summary, save_folder=None)
+    #     cs = CurationSorting(parent_sorting=we.sorting)
+    #     save_temp_file(temp_file_path, we=we, df_cleaning_summary=df_cleaning_summary)
+    # else:
+    #     print('Loading from files')
+    # print('##############################################')
     
 
-    print('\n########## Remove noise by splitting #########')
-    if df_cleaning_summary is None or 'Remove noise by splitting' not in df_cleaning_summary.columns:
-        we, df_cleaning_summary = split_noise_from_unit(recording, we, cs, df_cleaning_summary,
-                                                            min_silhouette_score_for_splitting=0.2, max_number_of_split=5, 
-                                                            save_plot=save_plot, 
-                                                            mouse=mouse, delay=delay)
-        save_temp_file(temp_file_path, we=we, df_cleaning_summary=df_cleaning_summary)
-    else:
-        print('Loading from files')
-    print('##############################################')
+    # print('\n########## Remove noise by splitting #########')
+    # if df_cleaning_summary is None or 'Remove noise by splitting' not in df_cleaning_summary.columns:
+    #     we, df_cleaning_summary = split_noise_from_unit(recording, we, cs, df_cleaning_summary,
+    #                                                         min_silhouette_score_for_splitting=0.2, max_number_of_split=5, 
+    #                                                         save_plot=save_plot, 
+    #                                                         mouse=mouse, delay=delay)
+    #     save_temp_file(temp_file_path, we=we, df_cleaning_summary=df_cleaning_summary)
+    # else:
+    #     print('Loading from files')
+    # print('##############################################')
 
 
-    print('\n########## Rename units #########')
-    if df_cleaning_summary is None or 'Rename units' not in df_cleaning_summary.columns:
-        cs = CurationSorting(parent_sorting=we.sorting) 
-        we, df_cleaning_summary = rename_unit(recording, cs, df_cleaning_summary, save_folder=save_folder)
-        save_temp_file(temp_file_path, we=we, df_cleaning_summary=df_cleaning_summary)
-        if plot:
-            plot_data_dict_maker('After splitting', 'Rename units', we, 'k', temp_file_path)
-    else:
-        print('Loading from files')
-    print('##############################################')
+    # print('\n########## Rename units #########')
+    # if df_cleaning_summary is None or 'Rename units' not in df_cleaning_summary.columns:
+    #     cs = CurationSorting(parent_sorting=we.sorting) 
+    #     we, df_cleaning_summary = rename_unit(recording, cs, df_cleaning_summary, save_folder=save_folder)
+    #     save_temp_file(temp_file_path, we=we, df_cleaning_summary=df_cleaning_summary)
+    #     if plot:
+    #         plot_data_dict_maker('After splitting', 'Rename units', we, 'k', temp_file_path)
+    # else:
+    #     print('Loading from files')
+    # print('##############################################')
     
-    if plot:
-        print('\n############ Plot cleaning summary ###########')
-        plot_cleaning_summary(temp_file_path, mouse, delay, sorter_name, save_plot=save_plot)
-        print('##############################################')
+    # if plot:
+    #     print('\n############ Plot cleaning summary ###########')
+    #     plot_cleaning_summary(temp_file_path, mouse, delay, sorter_name, save_plot=save_plot)
+    #     print('##############################################')
     
-    # erase_temp_file(temp_file_path)
-    return we
+    # # erase_temp_file(temp_file_path)
+    # return we
 
 if __name__ == "__main__":
     summary = pd.read_excel('C:/local_data/Paper/Data/metadata/metadata_summary.xlsx')

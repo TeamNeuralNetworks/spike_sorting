@@ -1,0 +1,290 @@
+{
+    "class": "spikeinterface.core.sortingfolder.NumpyFolderSorting",
+    "module": "spikeinterface",
+    "version": "0.101.0",
+    "kwargs": {
+        "folder_path": "."
+    },
+    "annotations": {
+        "__sorting_info__": {
+            "recording": {
+                "class": "spikeinterface.preprocessing.common_reference.CommonReferenceRecording",
+                "module": "spikeinterface",
+                "version": "0.101.0",
+                "kwargs": {
+                    "recording": {
+                        "class": "spikeinterface.preprocessing.filter.BandpassFilterRecording",
+                        "module": "spikeinterface",
+                        "version": "0.101.0",
+                        "kwargs": {
+                            "recording": {
+                                "class": "spikeinterface.extractors.neoextractors.intan.IntanRecordingExtractor",
+                                "module": "spikeinterface",
+                                "version": "0.101.0",
+                                "kwargs": {
+                                    "all_annotations": false,
+                                    "stream_id": "0",
+                                    "use_names_as_ids": false,
+                                    "file_path": "/_LMT/Data/giles/intan recordings/0032_01_240110_165411.rhd"
+                                },
+                                "annotations": {
+                                    "is_filtered": false
+                                },
+                                "properties": {
+                                    "group": null,
+                                    "location": null,
+                                    "gain_to_uV": [
+                                        0.195,
+                                        0.195,
+                                        0.195,
+                                        0.195,
+                                        0.195,
+                                        0.195,
+                                        0.195,
+                                        0.195,
+                                        0.195,
+                                        0.195,
+                                        0.195,
+                                        0.195,
+                                        0.195,
+                                        0.195,
+                                        0.195,
+                                        0.195
+                                    ],
+                                    "offset_to_uV": [
+                                        -6389.76,
+                                        -6389.76,
+                                        -6389.76,
+                                        -6389.76,
+                                        -6389.76,
+                                        -6389.76,
+                                        -6389.76,
+                                        -6389.76,
+                                        -6389.76,
+                                        -6389.76,
+                                        -6389.76,
+                                        -6389.76,
+                                        -6389.76,
+                                        -6389.76,
+                                        -6389.76,
+                                        -6389.76
+                                    ]
+                                },
+                                "relative_paths": false
+                            },
+                            "freq_min": 300,
+                            "freq_max": 6000,
+                            "margin_ms": 5.0,
+                            "dtype": "<i2"
+                        },
+                        "annotations": {
+                            "is_filtered": true
+                        },
+                        "properties": {
+                            "group": null,
+                            "location": null,
+                            "gain_to_uV": [
+                                0.195,
+                                0.195,
+                                0.195,
+                                0.195,
+                                0.195,
+                                0.195,
+                                0.195,
+                                0.195,
+                                0.195,
+                                0.195,
+                                0.195,
+                                0.195,
+                                0.195,
+                                0.195,
+                                0.195,
+                                0.195
+                            ],
+                            "offset_to_uV": [
+                                0,
+                                0,
+                                0,
+                                0,
+                                0,
+                                0,
+                                0,
+                                0,
+                                0,
+                                0,
+                                0,
+                                0,
+                                0,
+                                0,
+                                0,
+                                0
+                            ]
+                        },
+                        "relative_paths": false
+                    },
+                    "reference": "global",
+                    "groups": null,
+                    "operator": "median",
+                    "ref_channel_ids": null,
+                    "local_radius": [
+                        30,
+                        55
+                    ],
+                    "dtype": "<i2"
+                },
+                "annotations": {
+                    "is_filtered": true
+                },
+                "properties": {
+                    "group": [
+                        0,
+                        0,
+                        0,
+                        0,
+                        0,
+                        0,
+                        0,
+                        0,
+                        0,
+                        0,
+                        0,
+                        0,
+                        0,
+                        0,
+                        0,
+                        0
+                    ],
+                    "location": [
+                        [
+                            43.3,
+                            225.0
+                        ],
+                        [
+                            43.3,
+                            375.0
+                        ],
+                        [
+                            43.3,
+                            325.0
+                        ],
+                        [
+                            43.3,
+                            275.0
+                        ],
+                        [
+                            43.3,
+                            175.0
+                        ],
+                        [
+                            43.3,
+                            125.0
+                        ],
+                        [
+                            43.3,
+                            75.0
+                        ],
+                        [
+                            43.3,
+                            25.0
+                        ],
+                        [
+                            0.0,
+                            0.0
+                        ],
+                        [
+                            0.0,
+                            50.0
+                        ],
+                        [
+                            0.0,
+                            100.0
+                        ],
+                        [
+                            0.0,
+                            150.0
+                        ],
+                        [
+                            0.0,
+                            250.0
+                        ],
+                        [
+                            0.0,
+                            300.0
+                        ],
+                        [
+                            0.0,
+                            350.0
+                        ],
+                        [
+                            0.0,
+                            200.0
+                        ]
+                    ],
+                    "gain_to_uV": [
+                        0.195,
+                        0.195,
+                        0.195,
+                        0.195,
+                        0.195,
+                        0.195,
+                        0.195,
+                        0.195,
+                        0.195,
+                        0.195,
+                        0.195,
+                        0.195,
+                        0.195,
+                        0.195,
+                        0.195,
+                        0.195
+                    ],
+                    "offset_to_uV": [
+                        0,
+                        0,
+                        0,
+                        0,
+                        0,
+                        0,
+                        0,
+                        0,
+                        0,
+                        0,
+                        0,
+                        0,
+                        0,
+                        0,
+                        0,
+                        0
+                    ]
+                },
+                "relative_paths": false
+            },
+            "params": {
+                "sorter_name": "mountainsort4",
+                "sorter_params": {
+                    "detect_sign": -1,
+                    "adjacency_radius": -1,
+                    "freq_min": 300,
+                    "freq_max": 6000,
+                    "filter": true,
+                    "whiten": true,
+                    "num_workers": 1,
+                    "clip_size": 50,
+                    "detect_threshold": 3,
+                    "detect_interval": 10,
+                    "tempdir": null
+                }
+            },
+            "log": {
+                "sorter_name": "mountainsort4",
+                "sorter_version": "1.0.3",
+                "datetime": "2024-05-14T13:28:14.326455",
+                "runtime_trace": [],
+                "error": false,
+                "run_time": 28.90790450900022
+            }
+        }
+    },
+    "properties": {},
+    "relative_paths": true
+}

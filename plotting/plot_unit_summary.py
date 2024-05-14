@@ -12,6 +12,7 @@ from elephant import statistics, kernels
 from elephant.statistics import time_histogram
 from neo.core import SpikeTrain
 import spikeinterface.widgets as sw
+from spikeinterface.core.template_tools import  get_template_amplitudes
 
 from quantities import s, ms
 import numpy as np
@@ -25,18 +26,18 @@ import quantities as pq
 
 from curation.clean_unit import get_highest_amplitude_channel
 
-def plot_sorting_summary(we, sorter_name, delay, mouse, save_path=None, trial_len=9, acelerate=True):
-    
-    spost.compute_spike_locations(we)
+def plot_sorting_summary(analyzer, sorter_name, delay, mouse, save_path=None, trial_len=9, acelerate=True):
+    analyzer.compute(['random_spikes', 'waveforms', 'templates'])
+    spost.compute_spike_locations(analyzer)
     
     max_unit_amplitude = 0
     min_unit_amplitude = 0
-    for unit_id in we.sorting.get_unit_ids():
-        current_max_amplitude = we.get_template(unit_id=unit_id).max()
+    for template_amplitude in get_template_amplitudes(analyzer).values():
+        current_max_amplitude = template_amplitude.max()
         if current_max_amplitude > max_unit_amplitude:
             max_unit_amplitude = current_max_amplitude
          
-        current_min_amplitude = we.get_template(unit_id=unit_id).min()
+        current_min_amplitude = template_amplitude.min()
         if current_min_amplitude < min_unit_amplitude:
             min_unit_amplitude = current_min_amplitude
             
@@ -47,24 +48,24 @@ def plot_sorting_summary(we, sorter_name, delay, mouse, save_path=None, trial_le
         num_processes = multiprocessing.cpu_count()  # You can adjust this based on your CPU
         pool = multiprocessing.Pool(processes=num_processes)
     
-    for unit_id in we.sorting.get_unit_ids():
+    for unit_id in analyzer.unit_ids:
         if acelerate:
-            pool.apply_async(plot_summary_for_unit, (unit_id, we, sorter_name, delay, mouse, ylim, None, save_path, trial_len))
+            pool.apply_async(plot_summary_for_unit, (unit_id, analyzer, sorter_name, delay, mouse, ylim, None, save_path, trial_len))
         else:
-            plot_summary_for_unit(unit_id, we, sorter_name, delay, mouse, ylim, None, save_path, trial_len)
+            plot_summary_for_unit(unit_id, analyzer, sorter_name, delay, mouse, ylim, None, save_path, trial_len)
 
     if acelerate:
         # Close the pool and wait for all processes to finish
         pool.close()
         pool.join()
 
-def plot_summary_for_unit(unit_id, we, sorter_name, delay, mouse, ylim=None, unit_for_plot_name=None, save_path=None, trial_len=9):
+def plot_summary_for_unit(unit_id, analyzer, sorter_name, delay, mouse, ylim=None, unit_for_plot_name=None, save_path=None, trial_len=9):
     
     unit_for_plot_name = unit_id if unit_for_plot_name is None else unit_for_plot_name
     
     fig = plt.figure(figsize=(30, 13))
     gs = GridSpec(nrows=3, ncols=7)
-    fig.suptitle(f'{sorter_name}\n{mouse} {delay}\nunits {unit_for_plot_name} (Total spike {we.sorting.get_total_num_spikes()[unit_id]})',)
+    fig.suptitle(f'{sorter_name}\n{mouse} {delay}\nunits {unit_for_plot_name} (Total spike {analyzer.sorting.get_total_num_spikes()[unit_id]})',)
     ax0 = fig.add_subplot(gs[0, 0:2])
     ax1 = fig.add_subplot(gs[0, 2:4])
     ax1.set_title('Mean firing rate during a trial')
@@ -79,11 +80,11 @@ def plot_summary_for_unit(unit_id, we, sorter_name, delay, mouse, ylim=None, uni
     ax6 = fig.add_subplot(gs[2, 3:6])
     
     window_ms_autocorr = 200
-    sw.plot_autocorrelograms(we.sorting, unit_ids=[unit_id], axes=ax0, bin_ms=1, window_ms=window_ms_autocorr, )
+    sw.plot_autocorrelograms(analyzer.sorting, unit_ids=[unit_id], axes=ax0, bin_ms=1, window_ms=window_ms_autocorr, )
     ax0.set_xlim(-(window_ms_autocorr/2), (window_ms_autocorr/2))
     ax0.set_title('Autocorrelogram')
     
-    current_spike_train = we.sorting.get_unit_spike_train(unit_id)/we.sampling_frequency
+    current_spike_train = analyzer.sorting.get_unit_spike_train(unit_id)/analyzer.sampling_frequency
     current_spike_train_list = []
     while len(current_spike_train) > 0: #this loop is to split the spike train into trials with correct duration in seconds
         # Find indices of elements under 9 (9 sec being the duration of the trial)
@@ -121,27 +122,27 @@ def plot_summary_for_unit(unit_id, we, sorter_name, delay, mouse, ylim=None, uni
 
     plot_time_histogram(histogram, units='s', axes=ax1)
     ax1.set_xlim(0, trial_len)
-    sw.plot_spike_locations(we, unit_ids=[unit_id], ax=ax7, with_channel_ids=True)
+    sw.plot_spike_locations(analyzer, unit_ids=[unit_id], ax=ax7, with_channel_ids=True)
     ax7.set_title('Unit localisation')
-    sw.plot_unit_waveforms_density_map(we, unit_ids=[unit_id], ax=ax2)
+    sw.plot_unit_waveforms_density_map(analyzer, unit_ids=[unit_id], ax=ax2)
     if ylim is not None:
         ax2.set_ylim(ylim)
-    template = we.get_template(unit_id=unit_id).copy()
+    template = analyzer.get_template(unit_id=unit_id).copy()
     for curent_ax in [
                       ax3, 
                       ax4, 
                       ]:
         max_channel = np.argmax(np.abs(template))%template.shape[1]
         template[:,max_channel] = 0
-        mean_residual = np.mean(np.abs((we.get_waveforms(unit_id=unit_id)[:,:,max_channel] - we.get_template(unit_id=unit_id)[:,max_channel])), axis=0)
+        mean_residual = np.mean(np.abs((analyzer.get_waveforms(unit_id=unit_id)[:,:,max_channel] - analyzer.get_template(unit_id=unit_id)[:,max_channel])), axis=0)
         curent_ax.plot(mean_residual)
-        curent_ax.plot(we.get_template(unit_id=unit_id)[:,max_channel])
+        curent_ax.plot(analyzer.get_template(unit_id=unit_id)[:,max_channel])
         curent_ax.set_title('Mean residual of the waveform for channel '+str(max_channel))
         if ylim is not None:
             curent_ax.set_ylim(ylim)
     
     
-    waveform = we.get_waveforms(unit_id=unit_id)
+    waveform = analyzer.get_waveforms(unit_id=unit_id)
     waveform = get_highest_amplitude_channel(waveform).T
     ax5.plot(waveform, alpha=0.1, color='b')
     ax5.plot(np.median(waveform, axis=1), color='r', alpha=1)
