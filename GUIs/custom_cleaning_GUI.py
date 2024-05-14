@@ -74,8 +74,7 @@ def save_custom_cleaning_parameters(window):
                 current_param_value = True
             elif current_param_value == 'False':
                 current_param_value = False
-            
-            if not isinstance(current_param_value, bool) and current_param_value is not None:
+            else:
                 try:
                     if '.' or ',' in current_param_value:
                         param_to_convert = current_param_value.replace(',', '.')
@@ -103,6 +102,7 @@ def custom_cleaning_event_handler(window, values, event, current_sorter_param):
         
     if event == 'save_custom_cleaning_param_button':
         current_sorter_param[0]['custom_cleaning_param'] = save_custom_cleaning_parameters(window)
+        window.close()
         
     if event == 'reset_custom_cleaning_param_button':
         for main_param_name, main_param_dict in default_custom_cleaning_parameters_dict.items():

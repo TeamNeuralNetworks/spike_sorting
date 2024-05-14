@@ -81,105 +81,111 @@ def main_gui_maker(main_window, state, current_sorter_param, ephy_extension_dict
                 config_sorter_param_window.close()
             except AttributeError:
                 pass
+            try:
+                config_custom_cleaning_param_window.close()
+            except AttributeError:
+                pass
             break
-        
-        if event == sg.WIN_CLOSED:
-            if window == config_sorter_param_window:
-                config_sorter_param_window = None
-            elif window == config_custom_cleaning_param_window:
-                config_custom_cleaning_param_window = None
-            if window == main_window[0]:
-                try:
-                    config_sorter_param_window.close()
-                except AttributeError:
-                    pass
-                try:
-                    config_custom_cleaning_param_window.close()
-                except AttributeError:
-                    pass
-                state[0] = 'stop'
-                window.close()
-                break
-            
-        if event == 'sorter_combo':
-            current_sorter_param[0]['name'] = values['sorter_combo']
-            current_sorter_param[0]['sorting_param'] = sorter_param_dict[values['sorter_combo']]['param'] 
-            main_window[0]['sorter_param_button'].update(button_color='green')
-        
-        if event == 'custom_cleaning_checkbox':
-            if values['custom_cleaning_checkbox']:
-                main_window[0]['custom_cleaning_button'].update(visible=True)
-                current_sorter_param[0]['custom_cleaning_param'] = default_custom_cleaning_parameters_dict
-            else:
-                main_window[0]['custom_cleaning_button'].update(visible=False)
-                del current_sorter_param[0]['custom_cleaning_param']
-                
-        if event == 'manual_curation_checkbox':
-            if values['manual_curation_checkbox']:
-                main_window[0]['manual_cleaning_input_column'].update(visible=True)
-            else:
-                main_window[0]['manual_cleaning_input_column'].update(visible=False)
-        
-        if event == 'custom_cleaning_button':
-            config_custom_cleaning_param_window = make_config_custom_cleaning_param_window(current_sorter_param[0]['custom_cleaning_param'])
         
         if window == config_custom_cleaning_param_window:
             custom_cleaning_event_handler(window, values, event, current_sorter_param)
         
-        if event == 'sorter_param_button':
-            if values['sorter_combo'] == '':
-                sg.popup_error('Please select a sorter')
-            else:
-                config_sorter_param_window = configure_sorter_param(values['sorter_combo'] , sorter_param_dict)
-            
-        if window == config_sorter_param_window:
+        elif window == config_sorter_param_window:
             sorting_param_event_handler(window, values, event, current_sorter_param)
         
-        if event == 'ephy_file_input':
-            if values['ephy_file_input'].split('.')[-1] not in ephy_extension_dict.keys():
-                sg.popup_error(f"Unsuported ephy file format: {values['ephy_file_input'].split('.')[-1]}")
-                main_window[0]['Load_ephy_file'].update(button_color='red')
-            else:
-                current_sorter_param[0]['ephy_file_reading_function'] = ephy_extension_dict[values['ephy_file_input'].split('.')[-1]]
-                current_sorter_param[0]['ephy_file_path'] = values['ephy_file_input'] 
-                main_window[0]['Load_ephy_file'].update(button_color='green')
+        elif window == main_window[0]:
+            
+            if event == sg.WIN_CLOSED:
+                if window == config_sorter_param_window:
+                    config_sorter_param_window = None
+                elif window == config_custom_cleaning_param_window:
+                    config_custom_cleaning_param_window = None
+                if window == main_window[0]:
+                    try:
+                        config_sorter_param_window.close()
+                    except AttributeError:
+                        pass
+                    try:
+                        config_custom_cleaning_param_window.close()
+                    except AttributeError:
+                        pass
+                    state[0] = 'stop'
+                    window.close()
+                    break
                 
-        if event == 'probe_file_input':
-            if values['probe_file_input'].split('.')[-1] != 'json':
-                sg.popup_error(f"Unsuported probe file format: {values['ephy_file_input'].split('.')[-1]}")
-                main_window[0]['Load_probe_file'].update(button_color='red')
-            else:
-                current_sorter_param[0]['probe_file_path'] = values['probe_file_input'] 
-                main_window[0]['Load_probe_file'].update(button_color='green')
-        
-        if event == 'output_folder_input':
-            if values['output_folder_input'] != '':
-                current_sorter_param[0]['output_folder_path'] = values['output_folder_input'] 
-                main_window[0]['Select_output_folder'].update(button_color='green')
-            else:
-                main_window[0]['Select_output_folder'].update(button_color='red')
-        
-        
-        if event == 'launch_sorting_button':
-            SetLED(main_window, 'led_bandpass', 'red')
-            SetLED(main_window, 'led_comon_ref', 'red')
-            SetLED(main_window, 'led_sorting', 'red')
-            SetLED(main_window, 'led_Custom', 'red')
-            SetLED(main_window, 'led_Manual', 'red')
-            if 'name' not in current_sorter_param[0].keys():
-                sg.popup_error('Please select a sorter')
-            elif 'ephy_file_path' not in current_sorter_param[0].keys():
-                sg.popup_error('Please select a ephy file')
-            elif 'probe_file_path' not in current_sorter_param[0].keys():
-                sg.popup_error('Please select a probe file')
-            elif 'output_folder_path' not in current_sorter_param[0].keys():
-                sg.popup_error('Please select a output folder')
-            else:
-                current_sorter_param[0]['bandpass'] = [values['bandpass_checkbox'], values['low_bandpass_input'], values['high_bandpass_input']]
-                current_sorter_param[0]['comon_ref'] = values['comon_ref_checkbox']
-                current_sorter_param[0]['custom_cleaning'] = values['custom_cleaning_checkbox']
-                current_sorter_param[0]['manual_curation'] = values['manual_curation_checkbox']
-                state[0] = 'launch'
-        
-        if event == 'print_sorter_param_dict':
-            print(current_sorter_param[0]['sorting_param'])
+            if event == 'ephy_file_input':
+                if values['ephy_file_input'].split('.')[-1] not in ephy_extension_dict.keys():
+                    sg.popup_error(f"Unsuported ephy file format: {values['ephy_file_input'].split('.')[-1]}")
+                    main_window[0]['Load_ephy_file'].update(button_color='red')
+                else:
+                    current_sorter_param[0]['ephy_file_reading_function'] = ephy_extension_dict[values['ephy_file_input'].split('.')[-1]]
+                    current_sorter_param[0]['ephy_file_path'] = values['ephy_file_input'] 
+                    main_window[0]['Load_ephy_file'].update(button_color='green')
+                    
+            if event == 'probe_file_input':
+                if values['probe_file_input'].split('.')[-1] != 'json':
+                    sg.popup_error(f"Unsuported probe file format: {values['ephy_file_input'].split('.')[-1]}")
+                    main_window[0]['Load_probe_file'].update(button_color='red')
+                else:
+                    current_sorter_param[0]['probe_file_path'] = values['probe_file_input'] 
+                    main_window[0]['Load_probe_file'].update(button_color='green')
+            
+            if event == 'output_folder_input':
+                if values['output_folder_input'] != '':
+                    current_sorter_param[0]['output_folder_path'] = values['output_folder_input'] 
+                    main_window[0]['Select_output_folder'].update(button_color='green')
+                else:
+                    main_window[0]['Select_output_folder'].update(button_color='red')
+            
+            if event == 'sorter_combo':
+                current_sorter_param[0]['name'] = values['sorter_combo']
+                current_sorter_param[0]['sorting_param'] = sorter_param_dict[values['sorter_combo']]['param'] 
+                main_window[0]['sorter_param_button'].update(button_color='green')
+            
+            if event == 'sorter_param_button':
+                if values['sorter_combo'] == '':
+                    sg.popup_error('Please select a sorter')
+                else:
+                    config_sorter_param_window = configure_sorter_param(current_sorter_param[0]['name'], sorter_param_dict[current_sorter_param[0]['name']]['param_description'] , current_sorter_param[0]['sorting_param'])
+            
+            if event == 'custom_cleaning_checkbox':
+                if values['custom_cleaning_checkbox']:
+                    main_window[0]['custom_cleaning_button'].update(visible=True)
+                    current_sorter_param[0]['custom_cleaning_param'] = default_custom_cleaning_parameters_dict
+                else:
+                    main_window[0]['custom_cleaning_button'].update(visible=False)
+                    del current_sorter_param[0]['custom_cleaning_param']
+            
+            if event == 'custom_cleaning_button':
+                config_custom_cleaning_param_window = make_config_custom_cleaning_param_window(current_sorter_param[0]['custom_cleaning_param'])
+                
+            if event == 'manual_curation_checkbox':
+                if values['manual_curation_checkbox']:
+                    main_window[0]['manual_cleaning_input_column'].update(visible=True)
+                else:
+                    main_window[0]['manual_cleaning_input_column'].update(visible=False)
+
+            if event == 'launch_sorting_button':
+                SetLED(main_window, 'led_bandpass', 'red')
+                SetLED(main_window, 'led_comon_ref', 'red')
+                SetLED(main_window, 'led_sorting', 'red')
+                SetLED(main_window, 'led_Custom', 'red')
+                SetLED(main_window, 'led_Manual', 'red')
+                if 'name' not in current_sorter_param[0].keys():
+                    sg.popup_error('Please select a sorter')
+                elif 'ephy_file_path' not in current_sorter_param[0].keys():
+                    sg.popup_error('Please select a ephy file')
+                elif 'probe_file_path' not in current_sorter_param[0].keys():
+                    sg.popup_error('Please select a probe file')
+                elif 'output_folder_path' not in current_sorter_param[0].keys():
+                    sg.popup_error('Please select a output folder')
+                else:
+                    current_sorter_param[0]['bandpass'] = [values['bandpass_checkbox'], values['low_bandpass_input'], values['high_bandpass_input']]
+                    current_sorter_param[0]['comon_ref'] = values['comon_ref_checkbox']
+                    current_sorter_param[0]['custom_cleaning'] = values['custom_cleaning_checkbox']
+                    current_sorter_param[0]['manual_curation'] = values['manual_curation_checkbox']
+                    state[0] = 'launch'
+            
+            if event == 'print_sorter_param_dict':
+                print('\n')
+                print(current_sorter_param[0]['sorting_param'])
