@@ -156,9 +156,10 @@ def sorting_main():
     sorter = [None]
     analyser = [None]
     
-    gui_thread = threading.Thread(target=main_gui_maker, args=(main_window, state, current_sorter_param, ephy_extension_dict, recording, sorter, analyser))
-    gui_thread.start()
-        
+    # gui_thread = threading.Thread(target=main_gui_maker, args=(main_window, state, current_sorter_param, ephy_extension_dict, recording, sorter, analyser))
+    # gui_thread.start()
+    main_gui_maker(main_window, state, current_sorter_param, ephy_extension_dict, recording, sorter, analyser)
+    
     while True:
         while state[0] is None:
             time.sleep(0.1)
