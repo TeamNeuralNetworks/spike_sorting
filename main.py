@@ -33,9 +33,7 @@ default_param = {}
 def launch_sorting(current_sorter_param, main_window, state, recording, sorter, analyser):
     
     try:
-        
-        save_extention = True
-        
+               
         led_loading_animation_thread = threading.Thread(target=led_loading_animation, args=(state, main_window))
         led_loading_animation_thread.start()
         
@@ -45,38 +43,38 @@ def launch_sorting(current_sorter_param, main_window, state, recording, sorter, 
         
         #############################################
         ############## BandPass filter ##############
-        if current_sorter_param[0]['bandpass'][0]:
+        if current_sorter_param[0]['bandpass'][0] is True:
             print('bandpass')
             state[0] = 'bandpass'
             recording[0] = bandpass_filter(recording[0], freq_min=int(current_sorter_param[0]['bandpass'][1]), freq_max=int(current_sorter_param[0]['bandpass'][2]))
             SetLED(main_window, 'led_bandpass', 'green')
-            current_sorter_param[0]['bandpass'][0] = False
+            current_sorter_param[0]['bandpass'][0] = 'Done'
         #############################################
         
         #############################################
         ############# Comon ref removal #############
-        if current_sorter_param[0]['comon_ref']:
+        if current_sorter_param[0]['comon_ref'] is True:
             print('comon_ref')
             state[0] = 'comon_ref'
             recording[0] = common_reference(recording[0], reference='global', operator='median')
             SetLED(main_window, 'led_comon_ref', 'green')
-            current_sorter_param[0]['comon_ref'] = False
+            current_sorter_param[0]['comon_ref'] = 'Done'
         recording[0].annotate(is_filtered=True)
         #############################################
         
         #############################################
         ############# Probe assignement #############
-        if current_sorter_param[0]['probe_assign']:
+        if current_sorter_param[0]['probe_assign'] is True:
             print('probe_assign')
             probe = read_probeinterface(current_sorter_param[0]['probe_file_path'])
             probe = probe.probes[0]
             recording[0] = recording[0].set_probe(probe)
-            current_sorter_param[0]['probe_assign'] = False
+            current_sorter_param[0]['probe_assign'] = 'Done'
         #############################################
         
         #############################################
         ############## Running sorter ###############
-        if current_sorter_param[0]['sorting']:
+        if current_sorter_param[0]['sorting'] is True:
             state[0] = 'sorting'
             sorter[0] = run_sorter(sorter_name=current_sorter_param[0]['name'], recording=recording[0], docker_image=True, 
                                           output_folder=f"{current_sorter_param[0]['output_folder_path']}/{current_sorter_param[0]['name']}/base sorting/SorterOutput", 
@@ -93,34 +91,35 @@ def launch_sorting(current_sorter_param, main_window, state, recording, sorter, 
                                                    )
             plot_sorting_summary(analyser[0], 
                                  current_sorter_param[0]['name'], 
-                                 save_extention=save_extention,
                                  save_path=f"{current_sorter_param[0]['output_folder_path']}/{current_sorter_param[0]['name']}/base sorting", 
                                  trial_len=recording[0].get_duration(), 
                                  acelerate=False,)
+            current_sorter_param[0]['sorting'] = 'Done'
+            
             with open(f"{current_sorter_param[0]['output_folder_path']}/{current_sorter_param[0]['name']}/base sorting/pipeline_param.json", "w") as outfile: 
                 json.dump(current_sorter_param[0], outfile)
                 
             SetLED(main_window, 'led_sorting', 'green')
-            current_sorter_param[0]['sorting'] = False
+            
         #############################################
         
         
         #############################################
         ############## Custom cleaning ##############
-        if current_sorter_param[0]['custom_cleaning']:
+        if current_sorter_param[0]['custom_cleaning'] is True:
             state[0] = 'Custom'
-            analyser[0] = clean_unit(sorter[0], recording[0], current_sorter_param[0]['custom_cleaning_param'],
-                            save_folder=f"{current_sorter_param[0]['output_folder_path']}/{current_sorter_param[0]['name']}/custom cleaning",
-                            sorter_name=current_sorter_param[0]['name'], 
-                            save_plot=f"{current_sorter_param[0]['output_folder_path']}/{current_sorter_param[0]['name']}/custom cleaning") 
+            analyser[0] = clean_unit(analyser[0], current_sorter_param[0]['custom_cleaning_param'],
+                                    save_folder=f"{current_sorter_param[0]['output_folder_path']}/{current_sorter_param[0]['name']}/custom cleaning",
+                                    sorter_name=current_sorter_param[0]['name'], 
+                                    save_plot=f"{current_sorter_param[0]['output_folder_path']}/{current_sorter_param[0]['name']}/custom cleaning") 
             
             plot_sorting_summary(analyser[0], 
                                  current_sorter_param[0]['name'], 
-                                 save_extention=save_extention,
                                  save_path=f"{current_sorter_param[0]['output_folder_path']}/{current_sorter_param[0]['name']}/custom cleaning", 
                                  trial_len=recording[0].get_duration(), 
                                  acelerate=False,)
             
+            current_sorter_param[0]['custom_cleaning'] = 'Done'            
             with open(f"{current_sorter_param[0]['output_folder_path']}/{current_sorter_param[0]['name']}/custom cleaning/pipeline_param.json", "w") as outfile: 
                 json.dump(current_sorter_param[0], outfile)
             
@@ -130,7 +129,7 @@ def launch_sorting(current_sorter_param, main_window, state, recording, sorter, 
         
         #############################################
         ############## Manual curation ##############
-        if current_sorter_param[0]['manual_curation']:
+        if current_sorter_param[0]['manual_curation'] is True or current_sorter_param[0]['manual_curation'] == 'Done':
             state[0] = 'Manual'
             analyser[0], sorter[0], analyser_path = manual_curation_module(analyser[0], 
                                                                              sorter[0], 
@@ -141,6 +140,7 @@ def launch_sorting(current_sorter_param, main_window, state, recording, sorter, 
                                                                              mouse='', 
                                                                              trial_len=recording[0].get_duration()
                                                                              )
+            current_sorter_param[0]['manual_curation'] = 'Done'
             with open(f"{current_sorter_param[0]['output_folder_path']}/{current_sorter_param[0]['name']}/manual curation/pipeline_param.json", "w") as outfile: 
                 json.dump(current_sorter_param[0], outfile)
             

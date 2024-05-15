@@ -26,9 +26,10 @@ from matplotlib.gridspec import GridSpec
 import quantities as pq
 
 from curation.clean_unit import get_highest_amplitude_channel
+from additional.toolbox import load_or_compute_extension
 
 def plot_sorting_summary(analyzer, sorter_name, save_extention=False, save_path=None, trial_len=9, acelerate=True):
-    analyzer.compute(['random_spikes', 'waveforms', 'templates'], save=save_extention)
+    load_or_compute_extension(analyzer, ['random_spikes', 'waveforms', 'templates'], save_extention)
     spost.compute_spike_locations(analyzer)
     
     max_unit_amplitude = 0

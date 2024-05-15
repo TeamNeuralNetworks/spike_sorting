@@ -57,8 +57,8 @@ def select_folder_file(mode='folder'):
         return None
 
 
-def lock_analysis(window, mode, current_sorter_param):
-    current_sorter_param[0]['from_loading'] = mode
+def lock_analysis(window, current_sorter_param):
+    current_sorter_param[0]['from_loading'] = True
     
     window[0]['sorter_param_button'].update(disabled=True)
     window[0]['bandpass_checkbox'].update(disabled=True)
@@ -67,52 +67,50 @@ def lock_analysis(window, mode, current_sorter_param):
     window[0]['Load_probe_file'].update(disabled=True)
     window[0]['comon_ref_checkbox'].update(disabled=True)
     
-    if mode != 'sorting':
 
-        window[0]['Load_ephy_file'].update(button_color='green')
-        window[0]['Load_probe_file'].update(button_color='green')
-        
-        window[0]['Select_output_folder'].update(button_color='green')
-        window[0]['sorter_param_button'].update(button_color='green')
+    window[0]['Load_ephy_file'].update(button_color='green')
+    window[0]['Load_probe_file'].update(button_color='green')
     
-        if current_sorter_param[0]['bandpass'][0]:
-            SetLED(window, 'led_bandpass', 'green')
-            window[0]['low_bandpass_input'].update(current_sorter_param[0]['bandpass'][1])
-            window[0]['high_bandpass_input'].update(current_sorter_param[0]['bandpass'][2])
-            window[0]['bandpass_checkbox'].update(True)
-
+    window[0]['Select_output_folder'].update(button_color='green')
+    window[0]['sorter_param_button'].update(button_color='green')
+    
+    if current_sorter_param[0]['bandpass'][0]:
+        SetLED(window, 'led_bandpass', 'green')
+        window[0]['low_bandpass_input'].update(current_sorter_param[0]['bandpass'][1])
+        window[0]['high_bandpass_input'].update(current_sorter_param[0]['bandpass'][2])
+        window[0]['bandpass_checkbox'].update(True)
+    else:
         current_sorter_param[0]['bandpass'][0] = False
+        SetLED(window, 'led_bandpass', 'red')
 
-        if current_sorter_param[0]['comon_ref']:
-            window[0]['comon_ref_checkbox'].update(True)
-            SetLED(window, 'led_comon_ref', 'green')
+    if current_sorter_param[0]['comon_ref']:
+        window[0]['comon_ref_checkbox'].update(True)
+        SetLED(window, 'led_comon_ref', 'green')
+    else:
+        window[0]['comon_ref_checkbox'].update(False)
+        SetLED(window, 'led_comon_ref', 'red')
  
-        current_sorter_param[0]['comon_ref'] = False
-        current_sorter_param[0]['probe_assign'] = False
-        SetLED(window, 'led_sorting', 'green')
-        current_sorter_param[0]['sorting'] = False
         
-        window[0]['sorter_combo'].update(value=current_sorter_param[0]['name'])
+    SetLED(window, 'led_sorting', 'green')
+    window[0]['sorter_combo'].update(value=current_sorter_param[0]['name'])
         
-        if mode == 'custom cleaning' or mode == 'manual curation':
-            window[0]['sorter_combo'].update(disabled=True)
-            window[0]['sorter_param_button'].update(disabled=True)
-            SetLED(window, 'led_Custom', 'green')
-            current_sorter_param[0]['custom_cleaning'] = False
-            window[0]['custom_cleaning_button'].update(disabled=True)
-            window[0]['custom_cleaning_checkbox'].update(True)
-            window[0]['custom_cleaning_checkbox'].update(disabled=True)
-            if mode == 'manual curation':
-                SetLED(window, 'led_Manual', 'green')
-                current_sorter_param[0]['manual_curation'] = False
-                window[0]['manual_curation_checkbox'].update(True)
-                window[0]['manual_curation_checkbox'].update(disabled=True)
-            else:
-                window[0]['manual_curation_checkbox'].update(False)
-                window[0]['manual_curation_checkbox'].update(disabled=True)
+    if current_sorter_param[0]['custom_cleaning'] or current_sorter_param[0]['manual_curation']:
+        window[0]['sorter_combo'].update(disabled=True)
+        window[0]['sorter_param_button'].update(disabled=True)
+        SetLED(window, 'led_Custom', 'green')
+        window[0]['custom_cleaning_button'].update(disabled=True)
+        window[0]['custom_cleaning_checkbox'].update(True)
+        window[0]['custom_cleaning_checkbox'].update(disabled=True)
+        if current_sorter_param[0]['manual_curation']:
+            SetLED(window, 'led_Manual', 'green')
+            window[0]['manual_curation_checkbox'].update(True)
+            window[0]['manual_curation_checkbox'].update(disabled=True)
         else:
-            window[0]['custom_cleaning_checkbox'].update(False)
             window[0]['manual_curation_checkbox'].update(False)
+            window[0]['manual_curation_checkbox'].update(disabled=True)
+    else:
+        window[0]['custom_cleaning_checkbox'].update(False)
+        window[0]['manual_curation_checkbox'].update(False)
 
 def unlock_analysis(window, current_sorter_param):
 
@@ -123,23 +121,28 @@ def unlock_analysis(window, current_sorter_param):
     current_sorter_param[0]['comon_ref'] = window[0]['custom_cleaning_checkbox'].get()
     current_sorter_param[0]['manual_curation'] = window[0]['manual_curation_checkbox'].get()
     
-    if current_sorter_param[0]['from_loading'] not in ['sorting', 'custom_cleaning_checkbox', 'manual_curation_checkbox']:
+    if not current_sorter_param[0]['bandpass']:
         SetLED(window, 'led_bandpass', 'red')
+    if not current_sorter_param[0]['comon_ref']:
         SetLED(window, 'led_comon_ref', 'red')
+    if not current_sorter_param[0]['sorting']:
         SetLED(window, 'led_sorting', 'red')
-        window[0]['comon_ref_checkbox'].update(disabled=False)
-        window[0]['bandpass_checkbox'].update(disabled=False)
-        window[0]['bandpass_checkbox'].update(disabled=False)
-        window[0]['high_bandpass_input'].update(disabled=False)
-        window[0]['low_bandpass_input'].update(disabled=False)
-        window[0]['sorter_param_button'].update(disabled=False)
-        window[0]['Load_probe_file'].update(disabled=False)
-    if current_sorter_param[0]['from_loading'] not in ['custom_cleaning_checkbox', 'manual_curation_checkbox']:
+    window[0]['comon_ref_checkbox'].update(disabled=False)
+    window[0]['bandpass_checkbox'].update(disabled=False)
+    window[0]['bandpass_checkbox'].update(disabled=False)
+    window[0]['high_bandpass_input'].update(disabled=False)
+    window[0]['low_bandpass_input'].update(disabled=False)
+    window[0]['sorter_param_button'].update(disabled=False)
+    window[0]['Load_probe_file'].update(disabled=False)
+    
+    if not current_sorter_param[0]['custom_cleaning']:
         SetLED(window, 'led_Custom', 'red')
         window[0]['sorter_combo'].update(disabled=False)
         window[0]['custom_cleaning_checkbox'].update(disabled=False)
-    if current_sorter_param[0]['from_loading'] != 'manual_curation_checkbox':
+    if not current_sorter_param[0]['manual_curation']:
         SetLED(window, 'led_Manual', 'red')  
+        window[0]['sorter_combo'].update(disabled=False)
+        window[0]['custom_cleaning_checkbox'].update(disabled=False)
         window[0]['manual_curation_checkbox'].update(disabled=False)
     
 def load_analysis(window, recording, sorter, analyzer, current_sorter_param):
@@ -163,13 +166,17 @@ def load_analysis(window, recording, sorter, analyzer, current_sorter_param):
             sg.popup_error('No anlysis pipeline find')
             return 
         
-        analyzer[0] = load_sorting_analyzer(folder=fr'{path}\SortingAnalyzer')
-        sorter[0] = analyzer[0].sorting
-        recording[0] = analyzer[0].recording
-        with open(fr'{path}/pipeline_param.json', 'r') as file:
-             current_sorter_param[0] = json.load(file)
+        try:
+            analyzer[0] = load_sorting_analyzer(folder=fr'{path}\SortingAnalyzer')
+            sorter[0] = analyzer[0].sorting
+            recording[0] = analyzer[0].recording
+            with open(fr'{path}/pipeline_param.json', 'r') as file:
+                 current_sorter_param[0] = json.load(file)
+        except:
+            sg.popup_error('Unable to load analysis')
+            return  
      
-    lock_analysis(window, mode, current_sorter_param)
+        lock_analysis(window, current_sorter_param)
   
 def make_window(current_sorter_param):
     
@@ -292,6 +299,10 @@ def main_gui_maker(main_window, state, current_sorter_param, ephy_extension_dict
                             if current_sorter_param[0]['from_loading'] is not None:
                                 current_sorter_param[0]['from_loading'] = None
                                 unlock_analysis(main_window, current_sorter_param)
+                                main_window[0]['Load_probe_file'].update(button_color='red')
+                                main_window[0]['Select_output_folder'].update(button_color='red')
+                                del current_sorter_param[0]['probe_file_path'], current_sorter_param[0]['output_folder_path']
+                                
                         
                 if event == 'Load_probe_file':
                     path = select_folder_file(mode='file')
@@ -359,14 +370,7 @@ def main_gui_maker(main_window, state, current_sorter_param, ephy_extension_dict
                             SetLED(main_window, 'led_Manual', 'red')
                             current_sorter_param[0]['bandpass'] = [values['bandpass_checkbox'], values['low_bandpass_input'], values['high_bandpass_input']]
                             current_sorter_param[0]['comon_ref'] = values['comon_ref_checkbox']
-                            
-                        if current_sorter_param[0]['manual_curation']:
-                            mode = 'manual_curation'
-                        elif current_sorter_param[0]['custom_cleaning']:
-                            mode = 'custom_cleaning'
-                        else:
-                            mode = 'sorting'
-                        lock_analysis(main_window, mode, current_sorter_param)
+                        lock_analysis(main_window, current_sorter_param)
                         state[0] = 'launch'
             
             if event == 'debug_button':
