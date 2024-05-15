@@ -6,22 +6,8 @@ Created on Mon May 13 14:35:57 2024
 """
 import PySimpleGUI as sg
 from curation.clean_unit import big_artefact_methods, dimensionality_reduction_method_list
+from additional.toolbox import get_default_param
 
-
-default_custom_cleaning_parameters_dict = {'remove_edge_artefact': {'activate': True,
-                                                            'lenght_to_remove': 7,
-                                                            'trial_length': None},
-                                   'remove_big_artefact': {'activate': True,
-                                                           'method': big_artefact_methods[0],
-                                                           'threshold': 15},
-                                   'split_multi_unit': {'activate': True,
-                                                        'method': dimensionality_reduction_method_list[0],
-                                                        'threshold': 0.2,
-                                                        'max_split': 10,
-                                                        'min_spike_per_unit': 50},
-                                   'rename_unit': {'activate': True},
-                                   'plot_cleaning_summary': {'activate': True}
-                                   }
 
 def make_config_custom_cleaning_param_window(custom_cleaning_param, default_input_size=(5,2)):
     
@@ -89,20 +75,30 @@ def save_custom_cleaning_parameters(window):
             
     return custom_cleaning_parameters_dict
 
-def custom_cleaning_event_handler(window, values, event, current_sorter_param):
+def custom_cleaning_event_handler(window, values, event, current_sorter_param, state):
     if event == sg.WIN_CLOSED:
         current_param = save_custom_cleaning_parameters(window)
         if current_param != current_sorter_param[0]['custom_cleaning_param']:
-            save_changes_answer = sg.popup_yes_no('Save changes?')
-            if save_changes_answer == 'Yes':
-                current_sorter_param[0]['custom_cleaning_param'] = current_param
-        window.close()
-        
+            if state[0] is not None:
+                sg.popup_error('You can not change parameters while a analysis is in progress')
+            else:
+                save_changes_answer = sg.popup_yes_no('Save changes?')
+                if save_changes_answer == 'Yes':
+                    current_sorter_param[0]['custom_cleaning_param'] = current_param
+                window.close()
+        else:
+            window.close()
+
     if event == 'save_custom_cleaning_param_button':
-        current_sorter_param[0]['custom_cleaning_param'] = save_custom_cleaning_parameters(window)
-        window.close()
+        if state[0] is not None:
+            sg.popup_error('You can not change parameters while a analysis is in progress')
+        else:
+            current_sorter_param[0]['custom_cleaning_param'] = save_custom_cleaning_parameters(window)
+            window.close()
         
     if event == 'reset_custom_cleaning_param_button':
-        for main_param_name, main_param_dict in default_custom_cleaning_parameters_dict.items():
+        default_param = get_default_param()
+        
+        for main_param_name, main_param_dict in default_param['custom_cleaning_param'].items():
             for param_name, param_value in main_param_dict.items():
                 window[(main_param_name, param_name)].update(str(param_value))

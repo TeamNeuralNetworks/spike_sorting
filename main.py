@@ -4,24 +4,27 @@ Created on Tue May  7 10:26:45 2024
 
 @author: Pierre.LE-CABEC
 """
-import spikeinterface.extractors as se
-import spikeinterface.sorters as ss
-import spikeinterface.preprocessing as spre
+from spikeinterface.extractors import read_intan
+from spikeinterface.sorters import run_sorter
+from spikeinterface.preprocessing import bandpass_filter, common_reference
 from spikeinterface.core import create_sorting_analyzer
-import probeinterface as pi
+from probeinterface.io import read_probeinterface
 
 import threading
 import time
 import traceback
 import json
 import datetime
+from docker.errors import DockerException
+
 
 from plotting.plot_unit_summary import plot_sorting_summary
 from curation.clean_unit import clean_unit
 from curation.manual_curation import manual_curation_module
 from GUIs.Main_GUI import main_gui_maker, led_loading_animation, SetLED, trigger_popup_error
+from additional.toolbox import get_default_param
 
-ephy_extension_dict = {'rhd': lambda x:se.read_intan(x, stream_id='0'),
+ephy_extension_dict = {'rhd': lambda x:read_intan(x, stream_id='0'),
                        }
 
 default_param = {}
@@ -45,8 +48,9 @@ def launch_sorting(current_sorter_param, main_window, state, recording, sorter, 
         if current_sorter_param[0]['bandpass'][0]:
             print('bandpass')
             state[0] = 'bandpass'
-            recording[0] = spre.bandpass_filter(recording[0], freq_min=int(current_sorter_param[0]['bandpass'][1]), freq_max=int(current_sorter_param[0]['bandpass'][2]))
+            recording[0] = bandpass_filter(recording[0], freq_min=int(current_sorter_param[0]['bandpass'][1]), freq_max=int(current_sorter_param[0]['bandpass'][2]))
             SetLED(main_window, 'led_bandpass', 'green')
+            current_sorter_param[0]['bandpass'][0] = False
         #############################################
         
         #############################################
@@ -54,8 +58,9 @@ def launch_sorting(current_sorter_param, main_window, state, recording, sorter, 
         if current_sorter_param[0]['comon_ref']:
             print('comon_ref')
             state[0] = 'comon_ref'
-            recording[0] = spre.common_reference(recording[0], reference='global', operator='median')
+            recording[0] = common_reference(recording[0], reference='global', operator='median')
             SetLED(main_window, 'led_comon_ref', 'green')
+            current_sorter_param[0]['comon_ref'] = False
         recording[0].annotate(is_filtered=True)
         #############################################
         
@@ -63,17 +68,20 @@ def launch_sorting(current_sorter_param, main_window, state, recording, sorter, 
         ############# Probe assignement #############
         if current_sorter_param[0]['probe_assign']:
             print('probe_assign')
-            probe = pi.io.read_probeinterface(current_sorter_param[0]['probe_file_path'])
+            probe = read_probeinterface(current_sorter_param[0]['probe_file_path'])
             probe = probe.probes[0]
             recording[0] = recording[0].set_probe(probe)
+            current_sorter_param[0]['probe_assign'] = False
         #############################################
         
         #############################################
         ############## Running sorter ###############
         if current_sorter_param[0]['sorting']:
             state[0] = 'sorting'
-            sorter[0] = ss.run_sorter(sorter_name=current_sorter_param[0]['name'], recording=recording[0], docker_image=True, 
-                                          output_folder=None, verbose=True, **current_sorter_param[0]['sorting_param'])
+            sorter[0] = run_sorter(sorter_name=current_sorter_param[0]['name'], recording=recording[0], docker_image=True, 
+                                          output_folder=f"{current_sorter_param[0]['output_folder_path']}/{current_sorter_param[0]['name']}/base sorting/SorterOutput", 
+                                          verbose=True, 
+                                          **current_sorter_param[0]['sorting_param'])
             if len(sorter[0].get_unit_ids()) == 0:
                 trigger_popup_error(f"{current_sorter_param[0]['name']} has finished sorting but no units has been found")
                 raise ValueError
@@ -93,6 +101,7 @@ def launch_sorting(current_sorter_param, main_window, state, recording, sorter, 
                 json.dump(current_sorter_param[0], outfile)
                 
             SetLED(main_window, 'led_sorting', 'green')
+            current_sorter_param[0]['sorting'] = False
         #############################################
         
         
@@ -139,26 +148,29 @@ def launch_sorting(current_sorter_param, main_window, state, recording, sorter, 
         #############################################
         state[0] = None
         
-    except:
+    except Exception as e:
         print('\n')
         traceback.print_exc()
         if state[0] is not None:
             SetLED(main_window, f'led_{state[0]}', 'orange')
         state[0] = None
         
+        if e is DockerException:
+            trigger_popup_error('Docker Desktop need to be open first')
+            
+        
 def sorting_main():
     
     state = [None]
     main_window = [None]
-    current_sorter_param = [{'probe_assign': True,
-                             'sorting': True}]
+    current_sorter_param = [get_default_param()]
     recording = [None]
     sorter = [None]
     analyser = [None]
     
-    # gui_thread = threading.Thread(target=main_gui_maker, args=(main_window, state, current_sorter_param, ephy_extension_dict, recording, sorter, analyser))
-    # gui_thread.start()
-    main_gui_maker(main_window, state, current_sorter_param, ephy_extension_dict, recording, sorter, analyser)
+    gui_thread = threading.Thread(target=main_gui_maker, args=(main_window, state, current_sorter_param, ephy_extension_dict, recording, sorter, analyser))
+    gui_thread.start()
+    # main_gui_maker(main_window, state, current_sorter_param, ephy_extension_dict, recording, sorter, analyser)
     
     while True:
         while state[0] is None:

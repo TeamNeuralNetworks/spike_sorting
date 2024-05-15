@@ -98,19 +98,27 @@ def make_sorter_param_dict(sorter_name=None):
 
     return sorter_param_dict
 
-def sorting_param_event_handler(window, values, event, current_sorter_param):
+def sorting_param_event_handler(window, values, event, current_sorter_param, state):
     
     if event == sg.WIN_CLOSED:
         sorting_param = save_sorting_param(copy.deepcopy(current_sorter_param[0]['sorting_param']), window)
         if sorting_param != current_sorter_param[0]['sorting_param']:
-            save_changes_answer = sg.popup_yes_no('Save changes?')
-            if save_changes_answer == 'Yes':
-                current_sorter_param[0]['sorting_param'] = sorting_param
-        window.close()
+            if state[0] is not None:
+                sg.popup_error('You can not change parameters while a analysis is in progress')
+            else:
+                save_changes_answer = sg.popup_yes_no('Save changes?')
+                if save_changes_answer == 'Yes':
+                    current_sorter_param[0]['sorting_param'] = sorting_param
+                window.close()
+        else:
+            window.close()
     
     if event == 'save_param':
-        save_sorting_param(current_sorter_param[0]['sorting_param'], window)
-        window.close()
+        if state[0] is not None:
+            sg.popup_error('You can not change parameters while a analysis is in progress')
+        else:
+            save_sorting_param(current_sorter_param[0]['sorting_param'], window)
+            window.close()
                 
     if event == 'reset_param':
         default_param = make_sorter_param_dict(sorter_name=current_sorter_param[0]['name'])
