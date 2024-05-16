@@ -80,7 +80,7 @@ def custom_cleaning_event_handler(window, values, event, current_sorter_param, s
         current_param = save_custom_cleaning_parameters(window)
         if current_param != current_sorter_param[0]['custom_cleaning_param']:
             if state[0] is not None:
-                sg.popup_error('You can not change parameters while a analysis is in progress')
+                sg.popup_error('Parameters can not while a analysis is in progress')
             else:
                 save_changes_answer = sg.popup_yes_no('Save changes?')
                 if save_changes_answer == 'Yes':
@@ -91,7 +91,7 @@ def custom_cleaning_event_handler(window, values, event, current_sorter_param, s
 
     if event == 'save_custom_cleaning_param_button':
         if state[0] is not None:
-            sg.popup_error('You can not change parameters while a analysis is in progress')
+            sg.popup_error('Parameters can not while a analysis is in progress')
         else:
             current_sorter_param[0]['custom_cleaning_param'] = save_custom_cleaning_parameters(window)
             window.close()

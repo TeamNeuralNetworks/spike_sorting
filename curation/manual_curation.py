@@ -4,10 +4,8 @@ Created on Tue May  7 13:57:19 2024
 
 @author: Pierre.LE-CABEC
 """
-import spikeinterface as si  # import core only
 from spikeinterface.curation import apply_sortingview_curation, get_potential_auto_merge
 import spikeinterface.widgets as ww
-import spikeinterface.sorters as ss
 from spikeinterface.core import create_sorting_analyzer
 
 from plotting.plot_unit_summary import plot_sorting_summary
@@ -15,13 +13,30 @@ from additional.toolbox import load_or_compute_extension
 
 import os 
 import shutil
+import webbrowser
+import time
+import kachery_cloud as kcl
+import json
 
-def manual_curation_module(analyzer, sorter_folder, sorter_name, delay, mouse, save_plot=True, temp_file_indx=0):
+def manual_curation_event_handler(window, values, event, current_sorter_param, state): 
+    if event == 'open_manual_curation_outputlink_button':
+        webbrowser.open(current_sorter_param[0]['manual_curation_param']['outputlink'])
+        
+    if event in ['continue_manual_curation_inputlink_button', 'accept_manual_curation_inputlink_button']:
+        current_sorter_param[0]['manual_curation_param']['mode'] = event.split('_')[0]
+        current_sorter_param[0]['manual_curation_param']['inputlink'] = values['manual_curation_inputlink_input']
+
+        
+def manual_curation_module(analyzer, save_path, current_sorter_param, window, trial_len=9, save_plot=True):
     
-    temp_file_indx += 1
+    window['manual_cleaning_input_column'].update(visible=True)
+        
+    version = 1
     while True:
-        print(f'\n######### Curent curation version: {temp_file_indx} #########')
-        load_or_compute_extension(analyzer, ['spike_amplitudes', 'unit_locations', 'template_similarity', 'correlograms', 'template_metrics'])
+        print(f'\n######### Curation version: {version} #########')
+        # load_or_compute_extension(analyzer, ['spike_amplitudes', 'random_spikes', 'waveforms', 'templates', 'template_similarity', 'unit_locations', 'correlograms', 'template_metrics'])
+        analyzer.compute(['spike_amplitudes', 'random_spikes', 'waveforms', 'templates', 'template_similarity', 'unit_locations', 'correlograms', 'template_metrics'], 
+                         save=True)
         
         merges = get_potential_auto_merge(analyzer, minimum_spikes=0,  maximum_distance_um=150.,
                                           peak_sign="neg", bin_ms=0.25, window_ms=100.,
@@ -30,106 +45,109 @@ def manual_curation_module(analyzer, sorter_folder, sorter_name, delay, mouse, s
                                           contamination_threshold=0.2, num_channels=5, num_shift=5,
                                           firing_contamination_balance=1.5)
 
-        print( f'\nRecomanded merge: {merges}')
-        print('\nManual curation link:')
         
-        ww.plot_sorting_summary(analyzer, curation=True, backend='sortingview')
+        window['progress_text'].update('Generating link')
+        sorting_view = ww.plot_sorting_summary(analyzer, curation=True, backend='sortingview')
+        current_sorter_param[0]['manual_curation_param']['outputlink'] = sorting_view.url
+        current_sorter_param[0]['manual_curation_param']['inputlink'] = None
+        window['progress_text'].update(f'Recomanded merge: {merges}')
         
-        print('\nEnter manualy curated path or url (or "end" to make no modification)')
-        manualy_curated_json_file_path = input()
-        print('')
+        window['manual_curation_outputlink_input'].update(sorting_view.url)
+        window['manual_curation_outputlink_input'].update(text_color='black')
+        window['manual_curation_inputlink_input'].update('')
+        window['open_manual_curation_outputlink_button'].update(disabled=False)
+        window['continue_manual_curation_inputlink_button'].update(disabled=False)
+        window['accept_manual_curation_inputlink_button'].update(disabled=False)
         
-        if manualy_curated_json_file_path == 'end':
-            end_loop = 'end'
-        else:
-            sorter_manualy_curated = apply_sortingview_curation(sorting=analyzer.sorting, 
-                                                    uri_or_json=manualy_curated_json_file_path,
-                                                    exclude_labels=["reject", "noise", "artifact"])
-            
-            if os.path.isdir(f'{sorter_folder}/sorter_manualy_curated_temp_{temp_file_indx}_'):
-                shutil.rmtree(f'{sorter_folder}/sorter_manualy_curated_temp_{temp_file_indx}_')
-                
-            sorter_manualy_curated.save(folder=f'{sorter_folder}/sorter_manualy_curated_temp_{temp_file_indx}_', )
-            analyzer_path = f'{sorter_folder}/analyzer_manualy_curated_temp_{temp_file_indx}_'
-            analyzer_manualy_curated = create_sorting_analyzer(sorting=sorter_manualy_curated,
-                                                   recording=analyzer.recording,
-                                                   format="binary_folder",
-                                                   return_scaled=True, # this is the default to attempt to return scaled
-                                                   folder=analyzer_path, 
-                                                   overwrite=True
-                                                   )
-
-            
-            print('\nPlot sorting summary in progress')
-            if save_plot:
-                save_path = analyzer_path
-                plot_sorting_summary(analyzer_manualy_curated, sorter_name, save_path=save_path, trial_len=analyzer_manualy_curated.get_total_duration(), acelerate=False)          
-
-            print(f'\nAccept current manual curation?\nCheck current version at {analyzer_path}/Unit summary plot\nPress: -"y" to accept and generate a new url\n       -"n" to go back to previous curration\n       -"end" to accept and exit manual curration module')
-            end_loop = input()
-            print('##############################################')
-        if end_loop == 'n':
-            shutil.rmtree(f'{sorter_folder}/sorter_manualy_curated_temp_{temp_file_indx}_')
-            shutil.rmtree(f'{sorter_folder}/analyzer_manualy_curated_temp_{temp_file_indx}_')
-            continue
-        
-        elif end_loop == 'end':
-            temporary_manualy_curated_sorter_folder = os.listdir(sorter_folder)
-            temporary_manualy_curated_sorter_folder = [folder for folder in temporary_manualy_curated_sorter_folder if 'sorter_manualy_curated_temp_' in folder]
-            if not temporary_manualy_curated_sorter_folder:
-                print('\nNo manualy curated file found, do you want to save without making mdofication?\nPress "y" to save, "n" to continue manual curation')
-                while True:    
-                    manualy_curated_json_file_path = input()
-                    if manualy_curated_json_file_path == 'n':
-                        break
-                    elif manualy_curated_json_file_path == 'y':
-                        break
-                    else:
-                        print(f'\nUnrocognize input: {manualy_curated_json_file_path}')
+        while True:
+            time.sleep(0.1)
+            if current_sorter_param[0]['manual_curation_param']['inputlink'] is not None:
+                try:
+                    window['progress_text'].update('Converting link into SortingAnalyzer')
+                    sortingview_curation_dict = kcl.load_json(uri=current_sorter_param[0]['manual_curation_param']['inputlink'])
+                    if 'labelsByUnit' not in sortingview_curation_dict.keys():
+                        sortingview_curation_dict['labelsByUnit'] = {}
+                        for unit in analyzer.unit_ids:
+                            sortingview_curation_dict['labelsByUnit'][int(unit)] = ['accept']
+                            
+                        if not os.path.isdir(save_path):
+                            os.makedirs(save_path)
+                            save_path_existed = False
+                        else:
+                            save_path_existed = True
+                            
+                        with open(f"{save_path}/sortingview_curation_dict_temp_.json", "w") as outfile: 
+                            json.dump(sortingview_curation_dict, outfile)
                         
-                if manualy_curated_json_file_path == 'n':
+                        sorter_manualy_curated = apply_sortingview_curation(sorting=analyzer.sorting, 
+                                                                            uri_or_json=f"{save_path}/sortingview_curation_dict_temp_.json",
+                                                                            exclude_labels=["reject", "noise", "artifact"])
+                        os.remove(f"{save_path}/sortingview_curation_dict_temp_.json")
+                        if not save_path_existed: #this is done so that if it crash before saving SorterAnalyzer there will not be a empty manual curation folder
+                            shutil.rmtree(save_path)
+                            
+                    else:
+                        sorter_manualy_curated = apply_sortingview_curation(sorting=analyzer.sorting, 
+                                                                            uri_or_json=current_sorter_param[0]['manual_curation_param']['inputlink'],
+                                                                            exclude_labels=["reject", "noise", "artifact"])                
+                except:
+                    window['progress_text'].update('')
+                    window.write_event_value('popup_error', "Unable to convert link into SortingAnalyzer")
+                    window['manual_curation_inputlink_input'].update('')
+                    current_sorter_param[0]['manual_curation_param']['inputlink'] = None
                     continue
-                elif manualy_curated_json_file_path == 'y':
+                else:
                     break
-            else:
-                temporary_manualy_curated_sorter_indx_list = [folder.split('_')[-2] for folder in temporary_manualy_curated_sorter_folder]
-                print(f'\nwich of the following curation version is final: {temporary_manualy_curated_sorter_indx_list}')
-                manualy_curated_json_file_path = input()
-                del analyzer, sorter
-                final_manualy_curated_sorter = temporary_manualy_curated_sorter_folder[temporary_manualy_curated_sorter_indx_list.index(manualy_curated_json_file_path)]
-                sorter = ss.NpzSortingExtractor.load_from_folder(f'{sorter_folder}/{final_manualy_curated_sorter}')
-            
-            if os.path.isdir(f'{sorter_folder}/sorter_manualy_curated'):
-                shutil.rmtree(f'{sorter_folder}/sorter_manualy_curated')
-                
-            sorter.save(folder=f'{sorter_folder}/sorter_manualy_curated')
-            analyzer_path = f'{sorter_folder}/analyzer_manualy_curated'
-            analyzer = create_sorting_analyzer(sorting=sorter,
-                                                   recording=analyzer.recording,
-                                                   format="binary_folder",
-                                                   return_scaled=True, # this is the default to attempt to return scaled
-                                                   folder=analyzer_path, 
-                                                   overwrite=True
-                                                   )
-        
-            #Move plot file so it doesn't need to be computed again
-            shutil.move(f'{sorter_folder}/analyzer_manualy_curated_temp_{manualy_curated_json_file_path}_/Unit summary plot', f'{sorter_folder}/analyzer_manualy_curated/Unit summary plot')
+                window['progress_text'].update('')
 
-            for current_temp_file_indx in temporary_manualy_curated_sorter_folder:
-                try:
-                    shutil.rmtree(f'{sorter_folder}/{current_temp_file_indx}')
-                except:
-                    print(f"{sorter_folder}/{current_temp_file_indx}, couldn't be deleted")
-                try:
-                    shutil.rmtree(f'{sorter_folder}/{current_temp_file_indx.replace("sorter", "analyzer")}')
-                except:
-                    print(f"{sorter_folder}/{current_temp_file_indx.replace('sorter', 'analyzer')}, couldn't be deleted")
-            break
+        window['manual_curation_outputlink_input'].update('')
+        window['manual_curation_inputlink_input'].update('')
+        window['open_manual_curation_outputlink_button'].update(disabled=True)
+        window['continue_manual_curation_inputlink_button'].update(disabled=True)
+        window['accept_manual_curation_inputlink_button'].update(disabled=True)
+        current_sorter_param[0]['manual_curation_param']['outputlink'] = None
+        current_sorter_param[0]['manual_curation_param']['inputlink'] = None
         
-        elif end_loop == 'y':
-            temp_file_indx += 1
-            sorter = sorter_manualy_curated
-            analyzer = analyzer_manualy_curated
+        os.makedirs(save_path, exist_ok=True)
+        if current_sorter_param[0]['manual_curation_param']['mode'] == 'continue':
+            analyzer = create_sorting_analyzer(sorting=sorter_manualy_curated,
+                                                recording=analyzer.recording, 
+                                                format="memory"
+                                                )
+        elif current_sorter_param[0]['manual_curation_param']['mode'] == 'accept':
+            window['manual_cleaning_input_column'].update(visible=False)
+            create_sorting_analyzer(sorting=sorter_manualy_curated,
+                                                recording=analyzer.recording,
+                                                format="binary_folder",
+                                                return_scaled=True, # this is the default to attempt to return scaled
+                                                folder=f"{save_path}/SortingAnalyzer" , 
+                                                overwrite=True, 
+                                                )
+        window['progress_text'].update('')
+        
+        if os.path.isdir(fr'{save_path}\Unit_summary_plot'):
+            while True:
+                try:
+                    shutil.rmtree(fr'{save_path}\Unit_summary_plot')
+                except PermissionError:
+                    window.write_event_value('popup_error', "Please close previous version summary plot")
+                else:
+                    break
+        
+        window['progress_text'].update('Sorting Summary plot in progress')
+        plot_sorting_summary(analyzer, 
+                              current_sorter_param[0]['name'], 
+                              save_path=save_path, 
+                              trial_len=analyzer.get_total_duration(), 
+                              acelerate=False,)
+        window['progress_text'].update('')
+        
+        if current_sorter_param[0]['manual_curation_param']['mode'] == 'continue':
+            version += 1
             continue
+        elif current_sorter_param[0]['manual_curation_param']['mode'] == 'accept':
+            break
+        else:
+            raise ValueError('Not implemented')
         
-    return analyzer, sorter, analyzer_path
+    return analyzer

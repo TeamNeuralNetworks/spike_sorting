@@ -104,7 +104,7 @@ def sorting_param_event_handler(window, values, event, current_sorter_param, sta
         sorting_param = save_sorting_param(copy.deepcopy(current_sorter_param[0]['sorting_param']), window)
         if sorting_param != current_sorter_param[0]['sorting_param']:
             if state[0] is not None:
-                sg.popup_error('You can not change parameters while a analysis is in progress')
+                sg.popup_error('Parameters can not while a analysis is in progress')
             else:
                 save_changes_answer = sg.popup_yes_no('Save changes?')
                 if save_changes_answer == 'Yes':
@@ -115,7 +115,7 @@ def sorting_param_event_handler(window, values, event, current_sorter_param, sta
     
     if event == 'save_param':
         if state[0] is not None:
-            sg.popup_error('You can not change parameters while a analysis is in progress')
+            sg.popup_error('Parameters can not while a analysis is in progress')
         else:
             save_sorting_param(current_sorter_param[0]['sorting_param'], window)
             window.close()

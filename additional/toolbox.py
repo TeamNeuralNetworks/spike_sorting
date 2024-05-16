@@ -13,7 +13,7 @@ def get_default_param():
          default_param = json.load(file)
     return default_param
 
-def load_or_compute_extension(analyzer, extension_list, save_extention=False):
+def load_or_compute_extension(analyzer, extension_list, save_extention=False, extension_params=None):
     if not isinstance(extension_list, list) or isinstance(extension_list, tuple):
         extension_list = [extension_list]
         
@@ -24,4 +24,15 @@ def load_or_compute_extension(analyzer, extension_list, save_extention=False):
             extention_to_be_computes.append(extension_name)
             
     if extention_to_be_computes:
-        analyzer.compute(extention_to_be_computes, save=save_extention)
+        
+        if extension_params is not None:
+            use_extension_params = False 
+            for extention_name in extention_to_be_computes:
+                if extention_name in extension_params.keys():
+                    use_extension_params = True
+                    break
+            
+        if extension_params is None or not use_extension_params:
+            analyzer.compute(extention_to_be_computes, save=save_extention)
+        else:
+            analyzer.compute(extention_to_be_computes, save=save_extention, extension_params=extension_params)

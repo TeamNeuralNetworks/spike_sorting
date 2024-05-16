@@ -54,12 +54,12 @@ def perform_split(cs, unit_id, mask, remove_first_index_unit=True):
         nb_of_new_unit_ids = len(set(mask))
         new_unit_ids = cs._get_unused_id(nb_of_new_unit_ids)
         new_sorting = SplitUnitSorting(
-                                        sorting,
-                                        split_unit_id=unit_id,
-                                        indices_list=mask,
-                                        new_unit_ids=new_unit_ids,
-                                        properties_policy=cs._properties_policy,
-                                      )
+                                      sorting,
+                                      split_unit_id=unit_id,
+                                      indices_list=mask,
+                                      new_unit_ids=new_unit_ids,
+                                      properties_policy=cs._properties_policy,
+                                    )
         after_split_id = new_sorting.get_unit_ids()
         new_unit_id_list = [new_unit_id for new_unit_id in after_split_id if new_unit_id not in before_split_id]
         
@@ -75,7 +75,7 @@ def perform_split(cs, unit_id, mask, remove_first_index_unit=True):
 
 def remove_big_artefact(analyzer, cs, df_cleaning_summary, threshold, method='mad', save_folder=None, **kwargs):
     
-    load_or_compute_extension(analyzer, ['random_spikes', 'waveforms'])
+    load_or_compute_extension(analyzer, ['random_spikes', 'waveforms'], extension_params={"random_spikes":{"method": "all"}})
     
     new_df_row_list = []
     for unit_id in tqdm(analyzer.unit_ids, desc='Remove big artefact'):
@@ -110,13 +110,14 @@ def remove_big_artefact(analyzer, cs, df_cleaning_summary, threshold, method='ma
                                                format="binary_folder",
                                                return_scaled=True, # this is the default to attempt to return scaled
                                                folder=f"{save_folder}/SortingAnalyzer", 
-                                               overwrite=True
+                                               overwrite=True,
+                                               sparse=False
                                                )
-        clean_sorting.save(folder=f'{save_folder}/SorterOutput')
     else:
         clean_analyzer = create_sorting_analyzer(sorting=clean_sorting,
                                                recording=analyzer.recording, 
-                                               format="memory"
+                                               format="memory",
+                                               sparse=False
                                                )
         
     return clean_analyzer, df_cleaning_summary
@@ -151,24 +152,25 @@ def remove_edge_artefact(analyzer, cs, df_cleaning_summary, save_folder=None, le
                                                return_scaled=True, # this is the default to attempt to return scaled
                                                folder=f"{save_folder}/SortingAnalyzer", 
                                                overwrite=True, 
+                                               sparse=False
                                                )
-        clean_sorting.save(folder=f'{save_folder}/SorterOutput')
     else:
         clean_analyzer = create_sorting_analyzer(sorting=clean_sorting,
                                                recording=analyzer.recording, 
-                                               format="memory"
+                                               format="memory",
+                                               sparse=False
                                                )
 
     return clean_analyzer, df_cleaning_summary
 
 
-def split_noise_from_unit(analyzer, cs, df_cleaning_summary, min_spike_per_unit=50, 
+def split_noise_from_unit(analyzer, cs, window, df_cleaning_summary, min_spike_per_unit=50, 
                           threshold=0.2, max_split=10, 
                           save_folder=None, save_plot=None, 
                           method='phate', n_components=10,
                           **kwargs):
     
-    load_or_compute_extension(analyzer, ['random_spikes', 'waveforms'])
+    load_or_compute_extension(analyzer, ['random_spikes', 'waveforms'], extension_params={"random_spikes":{"method": "all"}})
     
     new_df_row_list = []
     unit_id_list = list(analyzer.unit_ids)
@@ -203,8 +205,10 @@ def split_noise_from_unit(analyzer, cs, df_cleaning_summary, min_spike_per_unit=
                     
             if len(set(group_array)) > 1:
                 print(f'Unit {unit_idx}/{len(analyzer.unit_ids)}--> {len(set(group_array))} split')
-
+                window['progress_text'].update(f'Unit {unit_idx}/{len(analyzer.unit_ids)}--> {len(set(group_array))} split')
+                
                 cs, new_unit_id_list = perform_split(cs, unit_id, group_array, remove_first_index_unit=False)
+
                 
                 for new_unit_id in new_unit_id_list:
                     current_unit_df_cleaning_summary = df_cleaning_summary[df_cleaning_summary[df_cleaning_summary.columns[-1]] == unit_id]
@@ -214,6 +218,7 @@ def split_noise_from_unit(analyzer, cs, df_cleaning_summary, min_spike_per_unit=
                     new_df_row_list.append(new_df)
             else:
                 print(f'Unit {unit_idx}/{len(analyzer.unit_ids)}--> No split performed')
+                window['progress_text'].update(f'Unit {unit_idx}/{len(analyzer.unit_ids)}--> No split performed')
                 
                 current_unit_df_cleaning_summary = df_cleaning_summary[df_cleaning_summary[df_cleaning_summary.columns[-1]] == unit_id]
                 assert len(current_unit_df_cleaning_summary) == 1, "there cannot be two unit with the same id"
@@ -257,6 +262,7 @@ def split_noise_from_unit(analyzer, cs, df_cleaning_summary, min_spike_per_unit=
         else:
             cs.remove_unit(unit_id=unit_id)
             print(f'Unit {unit_idx}/{len(analyzer.unit_ids)}--> Unit removed for not enought spike')
+            window['progress_text'].update(f'Unit {unit_idx}/{len(analyzer.unit_ids)}--> Unit removed for not enought spike')
     
     df_cleaning_summary = pd.concat(new_df_row_list)            
     clean_sorting = cs.sorting
@@ -266,17 +272,18 @@ def split_noise_from_unit(analyzer, cs, df_cleaning_summary, min_spike_per_unit=
                                                format="binary_folder",
                                                return_scaled=True, # this is the default to attempt to return scaled
                                                folder=f"{save_folder}/SortingAnalyzer", 
-                                               overwrite=True
+                                               overwrite=True,
+                                               sparse=False
                                                )
-        clean_sorting.save(folder=f'{save_folder}/SorterOutput')
     else:
         clean_analyzer = create_sorting_analyzer(sorting=clean_sorting,
                                                recording=analyzer.recording, 
-                                               format="memory"
+                                               format="memory",
+                                               sparse=False
                                                )
     return clean_analyzer, df_cleaning_summary
 
-def rename_unit(recording, cs, df_cleaning_summary, save_folder=None):
+def rename_unit(recording, cs, window, df_cleaning_summary, save_folder=None):
     
     before_empty_unti_remouval = cs.sorting.get_unit_ids()
     remove_empty_unit_sorting = cs.sorting.remove_empty_units()
@@ -284,8 +291,10 @@ def rename_unit(recording, cs, df_cleaning_summary, save_folder=None):
     removed_unit_id_list = [removed_unit_id for removed_unit_id in before_empty_unti_remouval if removed_unit_id not in after_empty_unti_remouval]
     for removed_unit_id in removed_unit_id_list:
         print(f'Unit {removed_unit_id} removed for empty: spikes number {len(cs.sorting.get_unit_spike_train(unit_id=removed_unit_id))}')
+        window['progress_text'].update(f'Unit {removed_unit_id} removed for empty: spikes number {len(cs.sorting.get_unit_spike_train(unit_id=removed_unit_id))}')
     cs = CurationSorting(parent_sorting=remove_empty_unit_sorting)
     print(f'{len(before_empty_unti_remouval)-len(after_empty_unti_remouval)} units have been remouve for being empty')
+    window['progress_text'].update(f'{len(before_empty_unti_remouval)-len(after_empty_unti_remouval)} units have been remouve for being empty')
     
     number_of_unit = len(cs.sorting.get_unit_ids())
     new_unit_id_list = [unit_id for unit_id in range(number_of_unit)]
@@ -309,19 +318,20 @@ def rename_unit(recording, cs, df_cleaning_summary, save_folder=None):
                                                format="binary_folder",
                                                return_scaled=True, # this is the default to attempt to return scaled
                                                folder=f"{save_folder}/SortingAnalyzer", 
-                                               overwrite=True
+                                               overwrite=True,
+                                               sparse=False
                                                )
-        clean_sorting.save(folder=f'{save_folder}/SorterOutput')
     else:
         clean_analyzer = create_sorting_analyzer(sorting=clean_sorting,
                                                recording=recording, 
-                                               format="memory"
+                                               format="memory",
+                                               sparse=False
                                                )
     return clean_analyzer, df_cleaning_summary
     
 def align_spike(analyzer, df_cleaning_summary, save_folder=None):
     
-    load_or_compute_extension(analyzer, ['random_spikes', 'waveforms', 'templates'])
+    load_or_compute_extension(analyzer, ['random_spikes', 'waveforms', 'templates'], extension_params={"random_spikes":{"method": "all"}})
     unit_peak_shifts = si.get_template_extremum_channel_peak_shift(analyzer, peak_sign='neg')
     clean_sorting = align_sorting(analyzer.sorting, unit_peak_shifts) 
     
@@ -340,13 +350,14 @@ def align_spike(analyzer, df_cleaning_summary, save_folder=None):
                                                format="binary_folder",
                                                return_scaled=True, # this is the default to attempt to return scaled
                                                folder=f"{save_folder}/SortingAnalyzer", 
-                                               overwrite=True
+                                               overwrite=True,
+                                               sparse=False, 
                                                )
-        clean_sorting.save(folder=f'{save_folder}/SorterOutput')
     else:
         clean_analyzer = create_sorting_analyzer(sorting=clean_sorting,
                                                recording=analyzer.recording, 
                                                format="memory",
+                                               sparse=False
                                                )
 
     return clean_analyzer, df_cleaning_summary
@@ -393,7 +404,7 @@ def plot_cleaning_summary(temp_file_path, sorter_name, save_plot=None):
 def plot_data_dict_maker(title, df_cleaning_summary_column_name, analyzer, color, temp_file_path, unit_id_conversion_dict=None):
     
     *_, plot_data_dict = load_temp_file(temp_file_path, load_plot_data_dict=True)
-    load_or_compute_extension(analyzer, ['random_spikes', 'waveforms'])
+    load_or_compute_extension(analyzer, ['random_spikes', 'waveforms'], extension_params={"random_spikes":{"method": "all"}})
     data_dict = {}
     for unit_id in analyzer.unit_ids:
         if unit_id_conversion_dict is not None:
@@ -444,7 +455,7 @@ def save_temp_file(temp_file_path, df_cleaning_summary=None, plot_data_dict=None
         with open(f'{temp_file_path}\{file_name_to_save}.pkl', 'wb') as file:
             pickle.dump(file_to_save, file)
             
-def clean_unit(analyzer, cleaning_param, save_folder=None, sorter_name=None, save_plot=None, *args): 
+def clean_unit(analyzer, cleaning_param, window, save_folder=None, sorter_name=None, save_plot=None, *args): 
     
     if not cleaning_param['plot_cleaning_summary']['activate']:
         save_plot=None
@@ -465,19 +476,21 @@ def clean_unit(analyzer, cleaning_param, save_folder=None, sorter_name=None, sav
     save_temp_file(temp_file_path, df_cleaning_summary=df_cleaning_summary)
     
     if cleaning_param['remove_edge_artefact']['activate']:
-        print('\n######## Remove edge artefact ##########')
+        print('\n##### Remove edge artefact #######')
         if df_cleaning_summary is None or 'Remove edge artefact' not in df_cleaning_summary.columns:
+            window['progress_text'].update('Removing edge artefact')
             analyzer, df_cleaning_summary = remove_edge_artefact(analyzer, cs, df_cleaning_summary, **cleaning_param['remove_edge_artefact'])
             cs = CurationSorting(parent_sorting=analyzer.sorting)
             save_temp_file(temp_file_path, df_cleaning_summary=df_cleaning_summary)
         else:
             print('Loading from files')
-        print('########################################')
+        print('##################################')
     
     
     if cleaning_param['remove_big_artefact']['activate']:
-        print('\n######### Remove big artefact ##########')
+        print('\n###### Remove big artefact #######')
         if df_cleaning_summary is None or 'Remove big artefact' not in df_cleaning_summary.columns:
+            window['progress_text'].update('Removing big artefact')
             analyzer, df_cleaning_summary = remove_big_artefact(analyzer, cs, df_cleaning_summary, **cleaning_param['remove_big_artefact'])
             cs = CurationSorting(parent_sorting=analyzer.sorting)
             if save_plot is not None:
@@ -485,43 +498,47 @@ def clean_unit(analyzer, cleaning_param, save_folder=None, sorter_name=None, sav
             save_temp_file(temp_file_path, df_cleaning_summary=df_cleaning_summary)
         else:
             print('Loading from files')
-        print('########################################')
+        print('##################################')
     
     
-    print('\n########## Align spikes ################')
+    print('\n########## Align spikes ###########')
     if df_cleaning_summary is None or 'Align spikes' not in df_cleaning_summary.columns:
+        window['progress_text'].update('Aligning spikes')
         analyzer, df_cleaning_summary = align_spike(analyzer, df_cleaning_summary, save_folder=None)
         cs = CurationSorting(parent_sorting=analyzer.sorting)
         save_temp_file(temp_file_path, df_cleaning_summary=df_cleaning_summary)
     else:
         print('Loading from files')
-    print('########################################')
+    print('##################################')
     
     if cleaning_param['split_multi_unit']['activate']:
-        print('\n####### Remove noise by splitting ######')
+        print('\n#### Remove noise by splitting ###')
         if df_cleaning_summary is None or 'Remove noise by splitting' not in df_cleaning_summary.columns:
-            analyzer, df_cleaning_summary = split_noise_from_unit(analyzer, cs, df_cleaning_summary, save_plot=save_plot, **cleaning_param['split_multi_unit'])
+            window['progress_text'].update('Splitting multi unit')
+            analyzer, df_cleaning_summary = split_noise_from_unit(analyzer, cs, window, df_cleaning_summary, save_plot=save_plot, **cleaning_param['split_multi_unit'])
             save_temp_file(temp_file_path, df_cleaning_summary=df_cleaning_summary)
         else:
             print('Loading from files')
-        print('########################################')
+        print('##################################')
 
     if cleaning_param['rename_unit']['activate']:
-        print('\n###### Rename units #######')
+        print('\n######### Rename units ##########')
         if df_cleaning_summary is None or 'Rename units' not in df_cleaning_summary.columns:
+            window['progress_text'].update('Renaming units')
             cs = CurationSorting(parent_sorting=analyzer.sorting) 
-            analyzer, df_cleaning_summary = rename_unit(analyzer.recording, cs, df_cleaning_summary, save_folder=save_folder)
+            analyzer, df_cleaning_summary = rename_unit(analyzer.recording, cs, window, df_cleaning_summary, save_folder=save_folder)
             save_temp_file(temp_file_path, df_cleaning_summary=df_cleaning_summary)
             if save_plot is not None:
                 plot_data_dict_maker('After splitting', 'Rename units', analyzer, 'k', temp_file_path)
         else:
             print('Loading from files')
-        print('########################################')
+        print('##################################')
     
     if save_plot is not None:
-        print('\n######### Plot cleaning summary ########')
+        print('\n###### Plot cleaning summary #####')
+        window['progress_text'].update('Sorting Summary plot in progress')
         plot_cleaning_summary(temp_file_path, sorter_name, save_plot=save_plot)
-        print('########################################')
+        print('##################################')
     
     erase_temp_file(temp_file_path)
     return analyzer   

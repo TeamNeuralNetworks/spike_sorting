@@ -157,12 +157,10 @@ def plot_summary_for_unit(unit_id, analyzer, sorter_name, ylim=None, unit_for_pl
 
     rasterplot_rates(current_spike_train_list, ax=ax6, histscale=0.1)
     if save_path is not None:
-        if not os.path.isdir(fr'{save_path}\Unit_summary_plot'):
-            os.makedirs(fr'{save_path}\Unit_summary_plot')
+        os.makedirs(fr'{save_path}\Unit_summary_plot', exist_ok=True)
         plt.savefig(fr'{save_path}\Unit_summary_plot\Unit_{int(unit_for_plot_name)}.pdf')
         
-        if not os.path.isdir(fr'{save_path}\Unit_summary_plot\png_version'):
-            os.makedirs(fr'{save_path}\Unit_summary_plot\png_version')
+        os.makedirs(fr'{save_path}\Unit_summary_plot\png_version', exist_ok=True)
         plt.savefig(fr'{save_path}\Unit_summary_plot\png_version\Unit_{int(unit_for_plot_name)}.png')
         plt.close()
         
