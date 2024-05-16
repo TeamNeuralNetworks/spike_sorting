@@ -70,12 +70,12 @@ def lock_analysis(window, current_sorter_param):
 
     window[0]['Load_ephy_file'].update(button_color='green')
     window[0]['Load_probe_file'].update(button_color='green')
-    
     window[0]['Select_output_folder'].update(button_color='green')
     window[0]['sorter_param_button'].update(button_color='green')
     
     if current_sorter_param[0]['bandpass'][0]:
-        SetLED(window, 'led_bandpass', 'green')
+        if current_sorter_param[0]['bandpass'][0] == 'Done':
+            SetLED(window, 'led_bandpass', 'green')
         window[0]['low_bandpass_input'].update(current_sorter_param[0]['bandpass'][1])
         window[0]['high_bandpass_input'].update(current_sorter_param[0]['bandpass'][2])
         window[0]['bandpass_checkbox'].update(True)
@@ -85,7 +85,9 @@ def lock_analysis(window, current_sorter_param):
 
     if current_sorter_param[0]['comon_ref']:
         window[0]['comon_ref_checkbox'].update(True)
-        SetLED(window, 'led_comon_ref', 'green')
+        if current_sorter_param[0]['comon_ref'] == 'Done':
+            SetLED(window, 'led_comon_ref', 'green')
+        
     else:
         window[0]['comon_ref_checkbox'].update(False)
         SetLED(window, 'led_comon_ref', 'red')
@@ -97,17 +99,20 @@ def lock_analysis(window, current_sorter_param):
     if current_sorter_param[0]['custom_cleaning'] or current_sorter_param[0]['manual_curation']:
         window[0]['sorter_combo'].update(disabled=True)
         window[0]['sorter_param_button'].update(disabled=True)
-        SetLED(window, 'led_Custom', 'green')
+        if current_sorter_param[0]['custom_cleaning'] == 'Done':
+            SetLED(window, 'led_Custom', 'green')
+        
         window[0]['custom_cleaning_button'].update(disabled=True)
         window[0]['custom_cleaning_checkbox'].update(True)
         window[0]['custom_cleaning_checkbox'].update(disabled=True)
         if current_sorter_param[0]['manual_curation']:
-            SetLED(window, 'led_Manual', 'green')
+            if current_sorter_param[0]['manual_curation'] == 'Done':
+                SetLED(window, 'led_Manual', 'green')
             window[0]['manual_curation_checkbox'].update(True)
             window[0]['manual_curation_checkbox'].update(disabled=True)
         else:
             window[0]['manual_curation_checkbox'].update(False)
-            window[0]['manual_curation_checkbox'].update(disabled=True)
+            window[0]['manual_curation_checkbox'].update(disabled=False)
     else:
         window[0]['custom_cleaning_checkbox'].update(False)
         window[0]['manual_curation_checkbox'].update(False)

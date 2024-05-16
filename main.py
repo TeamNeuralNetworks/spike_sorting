@@ -16,13 +16,18 @@ import traceback
 import json
 import datetime
 from docker.errors import DockerException
-
+import shutil
+import warnings
 
 from plotting.plot_unit_summary import plot_sorting_summary
 from curation.clean_unit import clean_unit
 from curation.manual_curation import manual_curation_module
-from GUIs.Main_GUI import main_gui_maker, led_loading_animation, SetLED, trigger_popup_error
+from GUIs.Main_GUI import main_gui_maker, led_loading_animation, SetLED, trigger_popup_error, unlock_analysis
 from additional.toolbox import get_default_param
+
+warnings.filterwarnings('ignore', category=FutureWarning)
+warnings.filterwarnings('ignore', category=RuntimeWarning)
+warnings.filterwarnings('ignore', category=UserWarning)
 
 ephy_extension_dict = {'rhd': lambda x:read_intan(x, stream_id='0'),
                        }
@@ -42,39 +47,40 @@ def launch_sorting(current_sorter_param, main_window, state, recording, sorter, 
         current_sorter_param[0]['time of analysis'] = current_time.strftime("%Y-%m-%d %H:%M:%S")
         
         #############################################
-        ############## BandPass filter ##############
         if current_sorter_param[0]['bandpass'][0] is True:
-            print('bandpass')
+            print('\n############## BandPass filter ##############')
             state[0] = 'bandpass'
             recording[0] = bandpass_filter(recording[0], freq_min=int(current_sorter_param[0]['bandpass'][1]), freq_max=int(current_sorter_param[0]['bandpass'][2]))
             SetLED(main_window, 'led_bandpass', 'green')
             current_sorter_param[0]['bandpass'][0] = 'Done'
-        #############################################
+            print('Done')
+            print('#############################################')
         
         #############################################
-        ############# Comon ref removal #############
         if current_sorter_param[0]['comon_ref'] is True:
-            print('comon_ref')
+            print('\n############# Comon ref removal #############')
             state[0] = 'comon_ref'
             recording[0] = common_reference(recording[0], reference='global', operator='median')
             SetLED(main_window, 'led_comon_ref', 'green')
             current_sorter_param[0]['comon_ref'] = 'Done'
+            print('Done')
+            print('#############################################')
         recording[0].annotate(is_filtered=True)
-        #############################################
+            
         
         #############################################
-        ############# Probe assignement #############
         if current_sorter_param[0]['probe_assign'] is True:
-            print('probe_assign')
+            print('\n############# Probe assignement #############')
             probe = read_probeinterface(current_sorter_param[0]['probe_file_path'])
             probe = probe.probes[0]
             recording[0] = recording[0].set_probe(probe)
             current_sorter_param[0]['probe_assign'] = 'Done'
-        #############################################
+            print('Done')
+            print('############################################n')
         
         #############################################
-        ############## Running sorter ###############
         if current_sorter_param[0]['sorting'] is True:
+            print('\n############## Running sorter ###############')
             state[0] = 'sorting'
             sorter[0] = run_sorter(sorter_name=current_sorter_param[0]['name'], recording=recording[0], docker_image=True, 
                                           output_folder=f"{current_sorter_param[0]['output_folder_path']}/{current_sorter_param[0]['name']}/base sorting/SorterOutput", 
@@ -100,13 +106,13 @@ def launch_sorting(current_sorter_param, main_window, state, recording, sorter, 
                 json.dump(current_sorter_param[0], outfile)
                 
             SetLED(main_window, 'led_sorting', 'green')
-            
-        #############################################
+            print('Done')
+            print('#############################################')
         
         
         #############################################
-        ############## Custom cleaning ##############
         if current_sorter_param[0]['custom_cleaning'] is True:
+            print('\n############## Custom cleaning ##############')
             state[0] = 'Custom'
             analyser[0] = clean_unit(analyser[0], current_sorter_param[0]['custom_cleaning_param'],
                                     save_folder=f"{current_sorter_param[0]['output_folder_path']}/{current_sorter_param[0]['name']}/custom cleaning",
@@ -124,12 +130,13 @@ def launch_sorting(current_sorter_param, main_window, state, recording, sorter, 
                 json.dump(current_sorter_param[0], outfile)
             
             SetLED(main_window, 'led_Custom', 'green')
-        #############################################
+            print('Done')
+            print('#############################################')
         
         
         #############################################
-        ############## Manual curation ##############
         if current_sorter_param[0]['manual_curation'] is True or current_sorter_param[0]['manual_curation'] == 'Done':
+            print('\n############## Manual curation ##############')
             state[0] = 'Manual'
             analyser[0], sorter[0], analyser_path = manual_curation_module(analyser[0], 
                                                                              sorter[0], 
@@ -145,7 +152,8 @@ def launch_sorting(current_sorter_param, main_window, state, recording, sorter, 
                 json.dump(current_sorter_param[0], outfile)
             
             SetLED(main_window, 'led_Manual', 'green')
-        #############################################
+            print('Done')
+            print('#############################################')
         state[0] = None
         
     except Exception as e:
@@ -153,12 +161,28 @@ def launch_sorting(current_sorter_param, main_window, state, recording, sorter, 
         traceback.print_exc()
         if state[0] is not None:
             SetLED(main_window, f'led_{state[0]}', 'orange')
-        state[0] = None
+
+        if state[0] == 'sorting':
+            shutil.rmtree(f"{current_sorter_param[0]['output_folder_path']}/{current_sorter_param[0]['name']}/base sorting")
+            
+        elif state[0] == 'Custom':
+            current_sorter_param[0]['custom_cleaning'] = False
+            with open(f"{current_sorter_param[0]['output_folder_path']}/{current_sorter_param[0]['name']}/base sorting/pipeline_param.json", "w") as outfile: 
+                json.dump(current_sorter_param[0], outfile)
+            shutil.rmtree(f"{current_sorter_param[0]['output_folder_path']}/{current_sorter_param[0]['name']}/custom cleaning")
         
-        if e is DockerException:
+        elif state[0] == 'Manual':
+            current_sorter_param[0]['manual_curation'] = False
+            with open(f"{current_sorter_param[0]['output_folder_path']}/{current_sorter_param[0]['name']}/custom cleaning/pipeline_param.json", "w") as outfile: 
+                json.dump(current_sorter_param[0], outfile)
+            shutil.rmtree(f"{current_sorter_param[0]['output_folder_path']}/{current_sorter_param[0]['name']}/manual curation")
+            
+        unlock_analysis(main_window, current_sorter_param)
+        
+        state[0] = None
+        if isinstance(e, DockerException):
             trigger_popup_error('Docker Desktop need to be open first')
             
-        
 def sorting_main():
     
     state = [None]

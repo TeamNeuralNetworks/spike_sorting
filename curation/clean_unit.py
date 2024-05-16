@@ -18,11 +18,8 @@ from tqdm import tqdm
 from sklearn.metrics import silhouette_score
 from sklearn.decomposition import PCA
 from scipy.cluster.hierarchy import linkage, fcluster
-import warnings
 import pickle
 import shutil
-warnings.filterwarnings('ignore', category=FutureWarning)
-warnings.filterwarnings('ignore', category=RuntimeWarning)
 
 from additional.toolbox import load_or_compute_extension
 
@@ -76,9 +73,9 @@ def perform_split(cs, unit_id, mask, remove_first_index_unit=True):
     else:
         return cs, [unit_id, ]
 
-def remove_big_artefact(analyzer, cs, df_cleaning_summary, thr, method='mad', save_folder=None):
+def remove_big_artefact(analyzer, cs, df_cleaning_summary, threshold, method='mad', save_folder=None, **kwargs):
     
-    load_or_compute_extension(analyzer, 'waveforms')
+    load_or_compute_extension(analyzer, ['random_spikes', 'waveforms'])
     
     new_df_row_list = []
     for unit_id in tqdm(analyzer.unit_ids, desc='Remove big artefact'):
@@ -90,9 +87,9 @@ def remove_big_artefact(analyzer, cs, df_cleaning_summary, thr, method='mad', sa
         
         if method == 'mad':
             median_absolute_deviation = np.median(np.abs(before_cleaning_waveforms - np.median(before_cleaning_waveforms)))
-            threshold = median_absolute_deviation*thr
+            threshold = median_absolute_deviation*threshold
         elif method == 'abs_value':
-            threshold = thr
+            threshold = threshold
             
         mask = np.all(abs(before_cleaning_waveforms) < threshold, axis=0)
         
@@ -153,7 +150,7 @@ def remove_edge_artefact(analyzer, cs, df_cleaning_summary, save_folder=None, le
                                                format="binary_folder",
                                                return_scaled=True, # this is the default to attempt to return scaled
                                                folder=f"{save_folder}/SortingAnalyzer", 
-                                               overwrite=True
+                                               overwrite=True, 
                                                )
         clean_sorting.save(folder=f'{save_folder}/SorterOutput')
     else:
@@ -165,32 +162,34 @@ def remove_edge_artefact(analyzer, cs, df_cleaning_summary, save_folder=None, le
     return clean_analyzer, df_cleaning_summary
 
 
-def split_noise_from_unit(recording, we, cs, df_cleaning_summary, min_spike_per_unit=50, 
-                          min_silhouette_score_for_splitting=0.2, max_number_of_split=10, 
-                          save_folder=None, save_plot=None, mouse=None, delay=None,
-                          dimensionality_reduction_method='phate'):
+def split_noise_from_unit(analyzer, cs, df_cleaning_summary, min_spike_per_unit=50, 
+                          threshold=0.2, max_split=10, 
+                          save_folder=None, save_plot=None, 
+                          method='phate', n_components=10,
+                          **kwargs):
+    
+    load_or_compute_extension(analyzer, ['random_spikes', 'waveforms'])
     
     new_df_row_list = []
-    unit_id_list = list(we.sorting.get_unit_ids())
+    unit_id_list = list(analyzer.unit_ids)
     unit_id_list.sort()
     for unit_idx, unit_id in enumerate(unit_id_list):
-        waveforms = we.get_waveforms(unit_id=unit_id)
+        waveforms = analyzer.get_extension('waveforms').get_waveforms_one_unit(unit_id=unit_id, force_dense=True)
         waveforms = get_highest_amplitude_channel(waveforms)
         
         if waveforms.shape[0] > min_spike_per_unit:
-            n_components = 10  # Number of principal components
-            if dimensionality_reduction_method == 'phate':
+            if method == 'phate':
                 phate_operator = phate.PHATE(n_jobs=-2)
                 phate_operator.set_params(knn=5, n_components=n_components, verbose=False)
                 principal_components = phate_operator.fit_transform(waveforms)
-            elif dimensionality_reduction_method == 'pca':
+            elif method == 'pca':
                 pca = PCA(n_components=n_components)
                 principal_components = pca.fit_transform(waveforms)
 
             linkage_matrix = linkage(principal_components, method='ward')
             
             best_silhouette_score = -1
-            for num_clusters in range(2, max_number_of_split+1):
+            for num_clusters in range(2, max_split+1):
                 clusters = fcluster(linkage_matrix, t=num_clusters, criterion='maxclust')
                 silhouette = silhouette_score(waveforms, clusters)
                 if silhouette > best_silhouette_score:
@@ -198,12 +197,12 @@ def split_noise_from_unit(recording, we, cs, df_cleaning_summary, min_spike_per_
                     group_array = clusters
             
             group_array = group_array - 1 #spikeinterface need to start from 0 not 1
-            if best_silhouette_score < min_silhouette_score_for_splitting:
+            if best_silhouette_score < threshold:
                 group_array = np.zeros(len(group_array))
             
                     
             if len(set(group_array)) > 1:
-                print(f'Unit {unit_idx}/{len(we.sorting.get_unit_ids())}--> {len(set(group_array))} split')
+                print(f'Unit {unit_idx}/{len(analyzer.unit_ids)}--> {len(set(group_array))} split')
 
                 cs, new_unit_id_list = perform_split(cs, unit_id, group_array, remove_first_index_unit=False)
                 
@@ -214,7 +213,7 @@ def split_noise_from_unit(recording, we, cs, df_cleaning_summary, min_spike_per_
                     new_df['Remove noise by splitting'] = [new_unit_id]
                     new_df_row_list.append(new_df)
             else:
-                print(f'Unit {unit_idx}/{len(we.sorting.get_unit_ids())}--> No split performed')
+                print(f'Unit {unit_idx}/{len(analyzer.unit_ids)}--> No split performed')
                 
                 current_unit_df_cleaning_summary = df_cleaning_summary[df_cleaning_summary[df_cleaning_summary.columns[-1]] == unit_id]
                 assert len(current_unit_df_cleaning_summary) == 1, "there cannot be two unit with the same id"
@@ -251,23 +250,31 @@ def split_noise_from_unit(recording, we, cs, df_cleaning_summary, min_spike_per_
                 ax.legend()
                 if not os.path.isdir(f'{save_plot}/cleaning_summary/splitting_summary'):
                     os.makedirs(f'{save_plot}/cleaning_summary/splitting_summary')
-                fig.savefig(f'{save_plot}/cleaning_summary/splitting_summary/{mouse}_{delay}_Unit{unit_id}_3d')
-                fig_cluster.savefig(f'{save_plot}/cleaning_summary/splitting_summary/{mouse}_{delay}_Unit{unit_id}_ind_cluster')
+                fig.savefig(f'{save_plot}/cleaning_summary/splitting_summary/Unit{unit_id}_3d')
+                fig_cluster.savefig(f'{save_plot}/cleaning_summary/splitting_summary/Unit{unit_id}_ind_cluster')
                 plt.close('all')
                 
         else:
             cs.remove_unit(unit_id=unit_id)
-            print(f'Unit {unit_idx}/{len(we.sorting.get_unit_ids())}--> Unit removed for not enought spike')
+            print(f'Unit {unit_idx}/{len(analyzer.unit_ids)}--> Unit removed for not enought spike')
     
     df_cleaning_summary = pd.concat(new_df_row_list)            
     clean_sorting = cs.sorting
     if save_folder is not None:
-        clean_we = si.extract_waveforms(recording, clean_sorting, max_spikes_per_unit=None, folder=f'{save_folder}/we', overwrite=True)
-        clean_sorting.save(folder=f'{save_folder}/sorter')
+        clean_analyzer = create_sorting_analyzer(sorting=clean_sorting,
+                                               recording=analyzer.recording,
+                                               format="binary_folder",
+                                               return_scaled=True, # this is the default to attempt to return scaled
+                                               folder=f"{save_folder}/SortingAnalyzer", 
+                                               overwrite=True
+                                               )
+        clean_sorting.save(folder=f'{save_folder}/SorterOutput')
     else:
-        clean_we = si.extract_waveforms(recording, clean_sorting, max_spikes_per_unit=None, mode='memory')
-
-    return clean_we, df_cleaning_summary
+        clean_analyzer = create_sorting_analyzer(sorting=clean_sorting,
+                                               recording=analyzer.recording, 
+                                               format="memory"
+                                               )
+    return clean_analyzer, df_cleaning_summary
 
 def rename_unit(recording, cs, df_cleaning_summary, save_folder=None):
     
@@ -297,17 +304,26 @@ def rename_unit(recording, cs, df_cleaning_summary, save_folder=None):
     
     clean_sorting = cs.sorting
     if save_folder is not None:
-        clean_we = si.extract_waveforms(recording, clean_sorting, max_spikes_per_unit=None, folder=f'{save_folder}/we', overwrite=True)
-        clean_sorting.save(folder=f'{save_folder}/sorter')
+        clean_analyzer = create_sorting_analyzer(sorting=clean_sorting,
+                                               recording=recording,
+                                               format="binary_folder",
+                                               return_scaled=True, # this is the default to attempt to return scaled
+                                               folder=f"{save_folder}/SortingAnalyzer", 
+                                               overwrite=True
+                                               )
+        clean_sorting.save(folder=f'{save_folder}/SorterOutput')
     else:
-        clean_we = si.extract_waveforms(recording, clean_sorting, max_spikes_per_unit=None, mode='memory')
+        clean_analyzer = create_sorting_analyzer(sorting=clean_sorting,
+                                               recording=recording, 
+                                               format="memory"
+                                               )
+    return clean_analyzer, df_cleaning_summary
     
-    return clean_we, df_cleaning_summary
+def align_spike(analyzer, df_cleaning_summary, save_folder=None):
     
-def align_spike(we, recording, df_cleaning_summary, save_folder=None):
-
-    unit_peak_shifts = si.get_template_extremum_channel_peak_shift(we, peak_sign='neg')
-    clean_sorting = align_sorting(we.sorting, unit_peak_shifts) 
+    load_or_compute_extension(analyzer, ['random_spikes', 'waveforms', 'templates'])
+    unit_peak_shifts = si.get_template_extremum_channel_peak_shift(analyzer, peak_sign='neg')
+    clean_sorting = align_sorting(analyzer.sorting, unit_peak_shifts) 
     
     new_df_row_list = []
     for unit_id in clean_sorting.get_unit_ids():
@@ -319,21 +335,30 @@ def align_spike(we, recording, df_cleaning_summary, save_folder=None):
     df_cleaning_summary = pd.concat(new_df_row_list) 
     
     if save_folder is not None:
-        clean_we = si.extract_waveforms(recording, clean_sorting, max_spikes_per_unit=None, folder=f'{save_folder}/we', overwrite=True)
-        clean_sorting.save(folder=f'{save_folder}/sorter')
+        clean_analyzer = create_sorting_analyzer(sorting=clean_sorting,
+                                               recording=analyzer.recording,
+                                               format="binary_folder",
+                                               return_scaled=True, # this is the default to attempt to return scaled
+                                               folder=f"{save_folder}/SortingAnalyzer", 
+                                               overwrite=True
+                                               )
+        clean_sorting.save(folder=f'{save_folder}/SorterOutput')
     else:
-        clean_we = si.extract_waveforms(recording, clean_sorting, max_spikes_per_unit=None, mode='memory')
+        clean_analyzer = create_sorting_analyzer(sorting=clean_sorting,
+                                               recording=analyzer.recording, 
+                                               format="memory",
+                                               )
 
-    return clean_we, df_cleaning_summary
+    return clean_analyzer, df_cleaning_summary
 
-def plot_cleaning_summary(temp_file_path, mouse, delay, sorter_name, save_plot=None):
+def plot_cleaning_summary(temp_file_path, sorter_name, save_plot=None):
     
     *_, df_cleaning_summary, plot_data_dict = load_temp_file(temp_file_path, load_df_cleaning_summary=True, load_plot_data_dict=True)
     
     last_cleaning_performed = df_cleaning_summary.columns[-1]
     for unit_id in tqdm(df_cleaning_summary[last_cleaning_performed], desc='Plot cleaning summary'):
 
-        title = f'{mouse}, {delay}, Unit: {unit_id}, {sorter_name}\n'
+        title = f'Unit: {unit_id}, {sorter_name}\n'
         for sup_title, df_cleaning_summary_column_name, data_dict, color in plot_data_dict['figure_data']:
             
             #this need to be done because one base unit can be split into multiple unit 
@@ -362,13 +387,13 @@ def plot_cleaning_summary(temp_file_path, mouse, delay, sorter_name, save_plot=N
         if save_plot is not None:
             if not os.path.isdir(f'{save_plot}/cleaning_summary'):
                 os.makedirs(f'{save_plot}/cleaning_summary')
-            plt.savefig(f'{save_plot}/cleaning_summary/{mouse}_{delay}_Unit{unit_id}')
+            plt.savefig(f'{save_plot}/cleaning_summary/Unit{unit_id}')
             plt.close()
 
 def plot_data_dict_maker(title, df_cleaning_summary_column_name, analyzer, color, temp_file_path, unit_id_conversion_dict=None):
     
     *_, plot_data_dict = load_temp_file(temp_file_path, load_plot_data_dict=True)
-    load_or_compute_extension(analyzer, 'waveforms')
+    load_or_compute_extension(analyzer, ['random_spikes', 'waveforms'])
     data_dict = {}
     for unit_id in analyzer.unit_ids:
         if unit_id_conversion_dict is not None:
@@ -421,6 +446,9 @@ def save_temp_file(temp_file_path, df_cleaning_summary=None, plot_data_dict=None
             
 def clean_unit(analyzer, cleaning_param, save_folder=None, sorter_name=None, save_plot=None, *args): 
     
+    if not cleaning_param['plot_cleaning_summary']['activate']:
+        save_plot=None
+    
     temp_file_path = f'{save_folder}/splitting_temp_file'
     if not os.path.isdir(temp_file_path):
         os.makedirs(temp_file_path)
@@ -432,107 +460,69 @@ def clean_unit(analyzer, cleaning_param, save_folder=None, sorter_name=None, sav
     if cleaning_param['plot_cleaning_summary']['activate']:
         #plot_data_dict is used to store the waveform of each step of cleaning for the different units
         #df_cleaning_summary will be used to keep track of the change of id each unit had at every step of the cleaning
-        plot_data_dict_maker('Before cleaning', 'unfilter', analyzer, 'r', temp_file_path)
+        if save_plot is not None:
+            plot_data_dict_maker('Before cleaning', 'unfilter', analyzer, 'r', temp_file_path)
     save_temp_file(temp_file_path, df_cleaning_summary=df_cleaning_summary)
     
     if cleaning_param['remove_edge_artefact']['activate']:
-        print('\n########### Remove edge artefact #############')
+        print('\n######## Remove edge artefact ##########')
         if df_cleaning_summary is None or 'Remove edge artefact' not in df_cleaning_summary.columns:
             analyzer, df_cleaning_summary = remove_edge_artefact(analyzer, cs, df_cleaning_summary, **cleaning_param['remove_edge_artefact'])
             cs = CurationSorting(parent_sorting=analyzer.sorting)
             save_temp_file(temp_file_path, df_cleaning_summary=df_cleaning_summary)
         else:
             print('Loading from files')
-        print('##############################################')
+        print('########################################')
     
     
-    print('\n############ Remove big artefact #############')
-    if df_cleaning_summary is None or 'Remove big artefact' not in df_cleaning_summary.columns:
-        analyzer, df_cleaning_summary = remove_big_artefact(analyzer, cs, df_cleaning_summary, thr=15, method='mad')
+    if cleaning_param['remove_big_artefact']['activate']:
+        print('\n######### Remove big artefact ##########')
+        if df_cleaning_summary is None or 'Remove big artefact' not in df_cleaning_summary.columns:
+            analyzer, df_cleaning_summary = remove_big_artefact(analyzer, cs, df_cleaning_summary, **cleaning_param['remove_big_artefact'])
+            cs = CurationSorting(parent_sorting=analyzer.sorting)
+            if save_plot is not None:
+                plot_data_dict_maker('After cleaning', 'Remove big artefact', analyzer, 'g', temp_file_path)
+            save_temp_file(temp_file_path, df_cleaning_summary=df_cleaning_summary)
+        else:
+            print('Loading from files')
+        print('########################################')
+    
+    
+    print('\n########## Align spikes ################')
+    if df_cleaning_summary is None or 'Align spikes' not in df_cleaning_summary.columns:
+        analyzer, df_cleaning_summary = align_spike(analyzer, df_cleaning_summary, save_folder=None)
         cs = CurationSorting(parent_sorting=analyzer.sorting)
-        plot_data_dict_maker('After cleaning', 'Remove big artefact', analyzer, 'g', temp_file_path)
-        save_temp_file(temp_file_path, analyzer=analyzer, df_cleaning_summary=df_cleaning_summary)
+        save_temp_file(temp_file_path, df_cleaning_summary=df_cleaning_summary)
     else:
         print('Loading from files')
-    print('##############################################')
+    print('########################################')
     
-    
-    # print('\n############# Align spikes ###################')
-    # if df_cleaning_summary is None or 'Align spikes' not in df_cleaning_summary.columns:
-    #     we, df_cleaning_summary = align_spike(we, recording, df_cleaning_summary, save_folder=None)
-    #     cs = CurationSorting(parent_sorting=we.sorting)
-    #     save_temp_file(temp_file_path, we=we, df_cleaning_summary=df_cleaning_summary)
-    # else:
-    #     print('Loading from files')
-    # print('##############################################')
-    
+    if cleaning_param['split_multi_unit']['activate']:
+        print('\n####### Remove noise by splitting ######')
+        if df_cleaning_summary is None or 'Remove noise by splitting' not in df_cleaning_summary.columns:
+            analyzer, df_cleaning_summary = split_noise_from_unit(analyzer, cs, df_cleaning_summary, save_plot=save_plot, **cleaning_param['split_multi_unit'])
+            save_temp_file(temp_file_path, df_cleaning_summary=df_cleaning_summary)
+        else:
+            print('Loading from files')
+        print('########################################')
 
-    # print('\n########## Remove noise by splitting #########')
-    # if df_cleaning_summary is None or 'Remove noise by splitting' not in df_cleaning_summary.columns:
-    #     we, df_cleaning_summary = split_noise_from_unit(recording, we, cs, df_cleaning_summary,
-    #                                                         min_silhouette_score_for_splitting=0.2, max_number_of_split=5, 
-    #                                                         save_plot=save_plot, 
-    #                                                         mouse=mouse, delay=delay)
-    #     save_temp_file(temp_file_path, we=we, df_cleaning_summary=df_cleaning_summary)
-    # else:
-    #     print('Loading from files')
-    # print('##############################################')
-
-
-    # print('\n########## Rename units #########')
-    # if df_cleaning_summary is None or 'Rename units' not in df_cleaning_summary.columns:
-    #     cs = CurationSorting(parent_sorting=we.sorting) 
-    #     we, df_cleaning_summary = rename_unit(recording, cs, df_cleaning_summary, save_folder=save_folder)
-    #     save_temp_file(temp_file_path, we=we, df_cleaning_summary=df_cleaning_summary)
-    #     if plot:
-    #         plot_data_dict_maker('After splitting', 'Rename units', we, 'k', temp_file_path)
-    # else:
-    #     print('Loading from files')
-    # print('##############################################')
+    if cleaning_param['rename_unit']['activate']:
+        print('\n###### Rename units #######')
+        if df_cleaning_summary is None or 'Rename units' not in df_cleaning_summary.columns:
+            cs = CurationSorting(parent_sorting=analyzer.sorting) 
+            analyzer, df_cleaning_summary = rename_unit(analyzer.recording, cs, df_cleaning_summary, save_folder=save_folder)
+            save_temp_file(temp_file_path, df_cleaning_summary=df_cleaning_summary)
+            if save_plot is not None:
+                plot_data_dict_maker('After splitting', 'Rename units', analyzer, 'k', temp_file_path)
+        else:
+            print('Loading from files')
+        print('########################################')
     
-    # if plot:
-    #     print('\n############ Plot cleaning summary ###########')
-    #     plot_cleaning_summary(temp_file_path, mouse, delay, sorter_name, save_plot=save_plot)
-    #     print('##############################################')
+    if save_plot is not None:
+        print('\n######### Plot cleaning summary ########')
+        plot_cleaning_summary(temp_file_path, sorter_name, save_plot=save_plot)
+        print('########################################')
     
-    # # erase_temp_file(temp_file_path)
-    # return we
-
-if __name__ == "__main__":
-    summary = pd.read_excel('C:/local_data/Paper/Data/metadata/metadata_summary.xlsx')
-    unit_id_list = summary['unit_id']
-    summary_simple = summary.dropna()[['peak_to_valley', 'peak_trough_ratio', 'half_width' ,'recovery_slope']]
-    phate_operator = phate.PHATE(n_jobs=-2)
-    phate_operator.set_params(knn=5, n_components=10, verbose=True)
-    principal_components = phate_operator.fit_transform(summary_simple)
-    
-    linkage_matrix = linkage(principal_components, method='ward')
-    
-    best_silhouette_score = -1
-    for num_clusters in range(2, 10+1):
-        clusters = fcluster(linkage_matrix, t=num_clusters, criterion='maxclust')
-        silhouette = silhouette_score(principal_components, clusters)
-        if silhouette > best_silhouette_score:
-            best_silhouette_score = silhouette
-            group_array = clusters
-    
-    number_ofcluster = len(np.unique(group_array))
-    fig= plt.figure(figsize=(12,8))
-    ax = fig.add_subplot(111, projection='3d')
-    ax.set_title(f'{round(best_silhouette_score, 3)}')
-    # Set labels for the axes
-    ax.set_xlabel('Principal Component 1')
-    ax.set_ylabel('Principal Component 2')
-    ax.set_zlabel('Principal Component 3')
-    
-    for group in np.unique(group_array):
-        mask = group_array == group
-        ax.scatter(principal_components[mask, 0],
-                   principal_components[mask, 1], 
-                   principal_components[mask, 2], 
-                   label=f'Group {group}')
-    
-    summary['template_metrics_cluster'] = group_array
-    
-    
+    erase_temp_file(temp_file_path)
+    return analyzer   
     

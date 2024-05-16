@@ -17,7 +17,11 @@ def load_or_compute_extension(analyzer, extension_list, save_extention=False):
     if not isinstance(extension_list, list) or isinstance(extension_list, tuple):
         extension_list = [extension_list]
         
+    extention_to_be_computes = []
     for extension_name in extension_list:
         extension_statues = analyzer.get_extension(extension_name)
         if extension_statues is None:
-            analyzer.compute([extension_name], save=save_extention)
+            extention_to_be_computes.append(extension_name)
+            
+    if extention_to_be_computes:
+        analyzer.compute(extention_to_be_computes, save=save_extention)

@@ -5,7 +5,6 @@ Created on Mon Oct 23 13:55:43 2023
 @author: Pierre.LE-CABEC
 """
 
-import spikeinterface.postprocessing as spost
 from viziphant.statistics import plot_time_histogram
 from viziphant.rasterplot import rasterplot_rates
 from elephant import statistics, kernels
@@ -24,13 +23,14 @@ import multiprocessing
 import matplotlib.pyplot as plt
 from matplotlib.gridspec import GridSpec
 import quantities as pq
+from tqdm import tqdm
 
 from curation.clean_unit import get_highest_amplitude_channel
 from additional.toolbox import load_or_compute_extension
 
+
 def plot_sorting_summary(analyzer, sorter_name, save_extention=False, save_path=None, trial_len=9, acelerate=True):
-    load_or_compute_extension(analyzer, ['random_spikes', 'waveforms', 'templates'], save_extention)
-    spost.compute_spike_locations(analyzer)
+    load_or_compute_extension(analyzer, ['random_spikes', 'waveforms', 'templates', 'spike_locations'], save_extention)
     
     max_unit_amplitude = 0
     min_unit_amplitude = 0
@@ -52,7 +52,7 @@ def plot_sorting_summary(analyzer, sorter_name, save_extention=False, save_path=
         num_processes = multiprocessing.cpu_count()  # You can adjust this based on your CPU
         pool = multiprocessing.Pool(processes=num_processes)
     
-    for unit_id in analyzer.unit_ids:
+    for unit_id in tqdm(analyzer.unit_ids, desc='Plot sorting summary'):
         if acelerate:
             pool.apply_async(plot_summary_for_unit, (unit_id, analyzer, sorter_name, ylim, None, save_path, trial_len))
         else:
