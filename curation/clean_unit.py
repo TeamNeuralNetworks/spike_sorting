@@ -331,7 +331,7 @@ def rename_unit(recording, cs, window, df_cleaning_summary, save_folder=None):
     
 def align_spike(analyzer, df_cleaning_summary, save_folder=None):
     
-    load_or_compute_extension(analyzer  ['random_spikes', 'waveforms', 'templates'], extension_params={"random_spikes":{"method": "all"}})
+    load_or_compute_extension(analyzer,  ['random_spikes', 'waveforms', 'templates'], extension_params={"random_spikes":{"method": "all"}})
     unit_peak_shifts = si.get_template_extremum_channel_peak_shift(analyzer, peak_sign='neg')
     clean_sorting = align_sorting(analyzer.sorting, unit_peak_shifts) 
     

@@ -124,11 +124,7 @@ def make_window(current_sorter_param):
     sorter_param_dict =  make_sorter_param_dict()
     
     main_menu_layout = [['File', ['Load analysis', 'Export spike time', 'Export Template']], 
-                        ['Edit',[
-                            # 'Import metadata', 
-                            'Ephy file tool', 
-                            # 'Probe tool'
-                            ]],
+                        # ['Edit',['Import metadata', 'Ephy file tool', 'Probe tool']],
                         ['Parameters',['Preprocessing parameter', 'Sorter parameter', 'Custom cleaning parameter']],
                         ]
     

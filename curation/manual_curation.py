@@ -38,19 +38,19 @@ def manual_curation_module(analyzer, save_path, current_sorter_param, window, tr
         analyzer.compute(['spike_amplitudes', 'random_spikes', 'waveforms', 'templates', 'template_similarity', 'unit_locations', 'correlograms', 'template_metrics'], 
                          save=True)
         
-        merges = get_potential_auto_merge(analyzer, minimum_spikes=0,  maximum_distance_um=150.,
-                                          peak_sign="neg", bin_ms=0.25, window_ms=100.,
-                                          corr_diff_thresh=0.16, template_diff_thresh=0.25,
-                                          censored_period_ms=0., refractory_period_ms=1.0,
-                                          contamination_threshold=0.2, num_channels=5, num_shift=5,
-                                          firing_contamination_balance=1.5)
+        # merges = get_potential_auto_merge(analyzer, minimum_spikes=0,  maximum_distance_um=150.,
+        #                                   peak_sign="neg", bin_ms=0.25, window_ms=100.,
+        #                                   corr_diff_thresh=0.16, template_diff_thresh=0.25,
+        #                                   censored_period_ms=0., refractory_period_ms=1.0,
+        #                                   contamination_threshold=0.2, num_channels=5, num_shift=5,
+        #                                   firing_contamination_balance=1.5)
 
         
         window['progress_text'].update('Generating link')
         sorting_view = ww.plot_sorting_summary(analyzer, curation=True, backend='sortingview')
         current_sorter_param[0]['manual_curation_param']['outputlink'] = sorting_view.url
         current_sorter_param[0]['manual_curation_param']['inputlink'] = None
-        window['progress_text'].update(f'Recomanded merge: {merges}')
+        # window['progress_text'].update(f'Recomanded merge: {merges}')
         
         window['manual_curation_outputlink_input'].update(sorting_view.url)
         window['manual_curation_outputlink_input'].update(text_color='black')
