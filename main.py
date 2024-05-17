@@ -10,6 +10,7 @@ from spikeinterface.core import create_sorting_analyzer
 from probeinterface.io import read_probeinterface
 from spikeinterface.core import load_sorting_analyzer
 
+
 import threading
 import time
 import traceback
@@ -18,14 +19,16 @@ import datetime
 from docker.errors import DockerException
 import shutil
 import warnings
-import os 
+import os
+import pandas as pd 
+import numpy as np
 
 from plotting.plot_unit_summary import plot_sorting_summary
 from curation.clean_unit import clean_unit
 from curation.manual_curation import manual_curation_module
 from curation.preprocessing import apply_preprocessing
 from GUIs.Main_GUI import main_gui_maker, led_loading_animation, SetLED, unlock_analysis, lock_analysis, select_folder_file
-from additional.toolbox import get_default_param
+from additional.toolbox import get_default_param, load_or_compute_extension
 
 warnings.filterwarnings('ignore', category=FutureWarning)
 warnings.filterwarnings('ignore', category=RuntimeWarning)
@@ -36,6 +39,28 @@ ephy_extension_dict = {'rhd': lambda x:read_intan(x, stream_id='0'),
 
 default_param = {}
 
+def export_to_excel(mode, path, analyzer):
+    tab_unit_df_list = []
+    
+    if mode == 'template':
+        load_or_compute_extension(analyzer, ['random_spikes', 'waveforms', 'templates'])
+    
+    for  unit_id in analyzer.sorting.unit_ids:
+        if mode == 'spike_time':
+            curent_spike_train_indx = analyzer.sorting.get_unit_spike_train(unit_id=unit_id)
+            curent_spike_train_time = curent_spike_train_indx / analyzer.sampling_frequency
+            tab_unit_df = pd.DataFrame(np.column_stack((curent_spike_train_indx, curent_spike_train_time)), 
+                                       columns=['spike_index', 'spike_time'])
+            tab_unit_df_list.append((unit_id, tab_unit_df))
+        elif mode == 'template':
+            curent_template = analyzer.get_extension('templates').get_unit_template(unit_id)
+            channel_ids = analyzer.channel_ids
+            tab_unit_df = pd.DataFrame(curent_template, columns=channel_ids)
+            tab_unit_df_list.append((unit_id, tab_unit_df))
+    
+    with pd.ExcelWriter(path, engine='openpyxl') as writer:
+        for unit_id, tab_unit_df in tab_unit_df_list:
+            tab_unit_df.to_excel(writer, sheet_name=f'unit_{unit_id}', index=False, )
 
 def load_analysis(window, current_sorter_param):
     path = select_folder_file(mode='folder')
@@ -96,7 +121,7 @@ def launch_sorting(current_sorter_param, main_window, state, analyzer):
         
         #############################################
         if current_sorter_param[0]['preprocessing'] is True:
-            print('\n############## Preprocess recording ##############')
+            print('\n########### Preprocess recording ###########')
             main_window[0]['progress_text'].update('Preprocess recording')
             state[0] = 'preprocessing'
             apply_preprocessing(recording, current_sorter_param[0]['preprocessing_param'], main_window)
@@ -116,7 +141,8 @@ def launch_sorting(current_sorter_param, main_window, state, analyzer):
                                           **current_sorter_param[0]['sorting_param'])
             if len(sorter.get_unit_ids()) == 0:
                 main_window[0].write_event_value('popup_error', f"{current_sorter_param[0]['name']} has finished sorting but no units has been found")
-                raise ValueError
+                raise ValueError('No unit found during sorting')
+                
             analyzer = create_sorting_analyzer(sorting=sorter,
                                                    recording=recording,
                                                    format="binary_folder",
@@ -186,7 +212,8 @@ def launch_sorting(current_sorter_param, main_window, state, analyzer):
         state[0] = None
         
         main_window[0]['progress_text'].update(f'Analysis pipeline is done: {len(analyzer.unit_ids)} unit has been found')
-        
+        return analyzer
+    
     except Exception as e:
         print('\n')
         traceback.print_exc()
@@ -195,16 +222,12 @@ def launch_sorting(current_sorter_param, main_window, state, analyzer):
             SetLED(main_window, f'led_{state[0]}', 'orange')
             state[0] = None
             
-            if error_stage == 'preprocessing':
+            if error_stage == 'preprocessing' or error_stage == 'sorting':
                 current_sorter_param[0]['preprocessing'] = False
                 current_sorter_param[0]['sorting'] = False
                 current_sorter_param[0]['custom_cleaning'] = False
                 current_sorter_param[0]['manual_curation'] = False
-            elif error_stage == 'sorting':
-                current_sorter_param[0]['sorting'] = False
-                current_sorter_param[0]['custom_cleaning'] = False
-                current_sorter_param[0]['manual_curation'] = False
-                shutil.rmtree(f"{current_sorter_param[0]['output_folder_path']}/{current_sorter_param[0]['name']}/base sorting")
+                
             elif error_stage == 'Custom':
                 current_sorter_param[0]['custom_cleaning'] = False
                 current_sorter_param[0]['manual_curation'] = False
@@ -218,12 +241,12 @@ def launch_sorting(current_sorter_param, main_window, state, analyzer):
                 if not current_sorter_param[0]["manual_curation_param"]['from_loading']:
                     shutil.rmtree(f"{current_sorter_param[0]['output_folder_path']}/{current_sorter_param[0]['name']}/manual curation")
                 
-            unlock_analysis(main_window, current_sorter_param)
-        
-        
-        
         if isinstance(e, DockerException):
             main_window[0].write_event_value('popup_error', "Docker Desktop need to be open for sorting")
+        
+        unlock_analysis(main_window, current_sorter_param, trigger_by_error=True)
+        
+        return analyzer
             
 def sorting_main():
     
@@ -243,13 +266,21 @@ def sorting_main():
             state[0] = None
         
         elif state[0] == 'launch': 
-            main_window[0]['launch_sorting_button'].update('Sorting in porgress')
             main_window[0]['launch_sorting_button'].update(disabled=True)
 
-            launch_sorting(current_sorter_param, main_window, state, analyzer)
+            analyzer = launch_sorting(current_sorter_param, main_window, state, analyzer)
             
-            main_window[0]['launch_sorting_button'].update('Launch Sorting')
             main_window[0]['launch_sorting_button'].update(disabled=False)
+            
+        elif state[0] == 'export_spike_time':
+            export_to_excel(mode='spike_time', path=current_sorter_param[0]['export_spike_time_path'], analyzer=analyzer)
+            del current_sorter_param[0]['export_spike_time_path']
+            state[0] = None
+            
+        elif state[0] == 'export_template':
+            export_to_excel(mode='template', path=current_sorter_param[0]['export_template_path'], analyzer=analyzer)
+            del current_sorter_param[0]['export_template_path']
+            state[0] = None
             
         else:
             time.sleep(0.1)

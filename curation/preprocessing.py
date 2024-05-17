@@ -9,7 +9,7 @@ from spikeinterface.preprocessing import bandpass_filter, common_reference
 def apply_preprocessing(recording, preprocessing_param, window):
     
     if preprocessing_param['bandpass']['activate']:
-        print('apllying bandpass')
+        print('applying bandpass')
         recording = bandpass_filter(recording, freq_min=int(preprocessing_param['bandpass']['low_freq']), freq_max=int(preprocessing_param['bandpass']['high_freq']))
         window[0]['progress_text'].update('')
     

@@ -93,25 +93,28 @@ def lock_analysis(window, current_sorter_param):
         window[0]['custom_cleaning_checkbox'].update(False)
         window[0]['manual_curation_checkbox'].update(False)
 
-def unlock_analysis(window, current_sorter_param):
+def unlock_analysis(window, current_sorter_param, trigger_by_error=False):
 
     current_sorter_param[0]['sorting'] = True
-    current_sorter_param[0]['custom_cleaning'] = window[0]['custom_cleaning_checkbox'].get()
-    current_sorter_param[0]['manual_curation'] = window[0]['manual_curation_checkbox'].get()
     
-    if not current_sorter_param[0]['preprocessing']:
-        SetLED(window, 'led_preprocessing', 'preprocessing')
-    if not current_sorter_param[0]['sorting']:
-        SetLED(window, 'led_sorting', 'red')
+    if current_sorter_param[0]['preprocessing'] != "Done":
+        window[0]['preprocessing_checkbox'].update(disabled=False)
+        if not trigger_by_error:
+            SetLED(window, 'led_preprocessing', 'red')
+    if current_sorter_param[0]['sorting'] != "Done":
+        if not trigger_by_error:
+            SetLED(window, 'led_sorting', 'red')
 
     window[0]['Load_probe_file'].update(disabled=False)
     
-    if not current_sorter_param[0]['custom_cleaning']:
-        SetLED(window, 'led_Custom', 'red')
+    if  current_sorter_param[0]['custom_cleaning'] != "Done":
+        if not trigger_by_error:
+            SetLED(window, 'led_Custom', 'red')
         window[0]['sorter_combo'].update(disabled=False)
         window[0]['custom_cleaning_checkbox'].update(disabled=False)
-    if not current_sorter_param[0]['manual_curation']:
-        SetLED(window, 'led_Manual', 'red')  
+    if current_sorter_param[0]['manual_curation'] != "Done":
+        if not trigger_by_error:
+            SetLED(window, 'led_Manual', 'red')  
         window[0]['sorter_combo'].update(disabled=False)
         window[0]['custom_cleaning_checkbox'].update(disabled=False)
         window[0]['manual_curation_checkbox'].update(disabled=False)
@@ -121,7 +124,11 @@ def make_window(current_sorter_param):
     sorter_param_dict =  make_sorter_param_dict()
     
     main_menu_layout = [['File', ['Load analysis', 'Export spike time', 'Export Template']], 
-                        ['Edit',['Import metadata', 'Ephy file tool', 'Probe tool']],
+                        ['Edit',[
+                            # 'Import metadata', 
+                            'Ephy file tool', 
+                            # 'Probe tool'
+                            ]],
                         ['Parameters',['Preprocessing parameter', 'Sorter parameter', 'Custom cleaning parameter']],
                         ]
     
@@ -158,9 +165,9 @@ def make_window(current_sorter_param):
                                   sg.B('Continue', k='continue_manual_curation_inputlink_button', disabled=True, tooltip='Generate a new curation link to continue manual curation'), 
                                   sg.B('Accept', k='accept_manual_curation_inputlink_button', disabled=True, tooltip='Accept the current link has final and stop manual curation')]]
                                 , k='manual_cleaning_input_column', visible=current_sorter_param[0]["manual_curation"]))],
-              [sg.B('Launch Sorting', k='launch_sorting_button', ), 
+              [sg.B('Start analysis', k='launch_sorting_button', ), 
                # sg.B('Debug', k='debug_button'), 
-               sg.T('', k='progress_text'), sg.ProgressBar(100, key='progress_bar', visible=False, size=(5, 2))]
+               sg.T('', k='progress_text'), sg.ProgressBar(100, key='progress_bar', visible=False, size=(5, 2))],
              ]
     
     return sg.Window('Spike sorting GUI', layout, finalize=True), sorter_param_dict
@@ -237,14 +244,18 @@ def main_gui_maker(main_window, state, current_sorter_param, ephy_extension_dict
                     if path is not None:
                         if path.split('.')[-1] not in ephy_extension_dict.keys():
                             sg.popup_error(f"Unsuported ephy file format: {path.split('.')[-1]}")
-                            if current_sorter_param[0]['from_loading'] is None:
+                            if not current_sorter_param[0]['from_loading']:
                                 main_window[0]['Load_ephy_file'].update(button_color='red')
                         else:
                             current_sorter_param[0]['ephy_file_extension'] = path.split('.')[-1]
                             current_sorter_param[0]['ephy_file_path'] = path
                             main_window[0]['Load_ephy_file'].update(button_color='green')
                             if current_sorter_param[0]['from_loading'] is not None:
-                                current_sorter_param[0]['from_loading'] = None
+                                current_sorter_param[0]['from_loading'] = False
+                                current_sorter_param[0]['preprocessing'] = False
+                                current_sorter_param[0]['sorting'] = False
+                                current_sorter_param[0]['custom_cleaning'] = False
+                                current_sorter_param[0]['manual_curation'] = False
                                 unlock_analysis(main_window, current_sorter_param)
                                 main_window[0]['Load_probe_file'].update(button_color='red')
                                 main_window[0]['Select_output_folder'].update(button_color='red')
@@ -270,7 +281,7 @@ def main_gui_maker(main_window, state, current_sorter_param, ephy_extension_dict
                         main_window[0]['Select_output_folder'].update(button_color='red')
                 
                 if event == 'sorter_combo':
-                    if current_sorter_param[0]['name'] != values['sorter_combo'] and current_sorter_param[0]['from_loading'] is not None:
+                    if current_sorter_param[0]['name'] != values['sorter_combo'] and not current_sorter_param[0]['from_loading']:
                         unlock_analysis(main_window, current_sorter_param)
                     current_sorter_param[0]['name'] = values['sorter_combo']
                     current_sorter_param[0]['sorting_param'] = sorter_param_dict[values['sorter_combo']]['param'] 
@@ -306,13 +317,27 @@ def main_gui_maker(main_window, state, current_sorter_param, ephy_extension_dict
                     elif current_sorter_param[0]['output_folder_path'] is None:
                         sg.popup_error('Please select a output folder')
                     else:
-                        if current_sorter_param[0]['from_loading'] is None:
+                        if not current_sorter_param[0]['from_loading']:
                             SetLED(main_window, 'led_preprocessing', 'red')
                             SetLED(main_window, 'led_sorting', 'red')
                             SetLED(main_window, 'led_Custom', 'red')
                             SetLED(main_window, 'led_Manual', 'red')
                         lock_analysis(main_window, current_sorter_param)
                         state[0] = 'launch'
+            
+            if event == 'Export spike time':
+                if current_sorter_param[0]['sorting'] == 'Done' or current_sorter_param[0]['custom_cleaning'] == 'Done' or current_sorter_param[0]['manual_curation'] == 'Done':
+                    export_spike_time_path = sg.popup_get_file('Export spike time', save_as=True, no_window=True, file_types=(("Excel", "*.xlsx"),))
+                    current_sorter_param[0]['export_spike_time_path'] = export_spike_time_path
+                    state[0] = 'export_spike_time'
+                else:
+                    sg.popup_error('No analysis found to export spike time from')
+            if event == 'Export Template':
+                if current_sorter_param[0]['sorting'] == 'Done' or current_sorter_param[0]['custom_cleaning'] == 'Done' or current_sorter_param[0]['manual_curation'] == 'Done':
+                    current_sorter_param[0]['export_template_path'] = sg.popup_get_file('Export spike time', save_as=True, no_window=True, file_types=(("Excel", "*.xlsx"),))
+                    state[0] = 'export_template'
+                else:
+                    sg.popup_error('No analysis found to export spike time from')
             
             if event == 'popup_error':
                 sg.popup_error(values['popup_error'])
