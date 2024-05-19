@@ -6,7 +6,7 @@ Created on Tue May  7 10:26:45 2024
 """
 from spikeinterface.extractors import read_intan
 from spikeinterface.sorters import run_sorter
-from spikeinterface.core import create_sorting_analyzer
+from spikeinterface.core import create_sorting_analyzer, BinaryFolderRecording
 from probeinterface.io import read_probeinterface
 from spikeinterface.core import load_sorting_analyzer
 
@@ -35,6 +35,7 @@ warnings.filterwarnings('ignore', category=RuntimeWarning)
 warnings.filterwarnings('ignore', category=UserWarning)
 
 ephy_extension_dict = {'rhd': lambda x:read_intan(x, stream_id='0'),
+                       'folder': lambda x:BinaryFolderRecording(x)
                        }
 
 default_param = {}
@@ -92,15 +93,32 @@ def load_analysis(window, current_sorter_param):
                 current_sorter_param[0]["manual_curation_param"]['from_loading'] = True
             else:
                 current_sorter_param[0]["manual_curation_param"]['from_loading'] = False
+            
+            recording = analyzer.recording
+            probe = analyzer.get_probe()
                 
         except:
             window[0].write_event_value('popup_error', 'Unable to load analysis')
-            return  None
+            return  None, None, None
         else:
             lock_analysis(window, current_sorter_param) 
-            return analyzer
+            return analyzer, recording, probe
 
-def launch_sorting(current_sorter_param, main_window, state, analyzer):
+def load_recording(current_sorter_param):
+    recording = ephy_extension_dict[current_sorter_param[0]['ephy_file_extension']](current_sorter_param[0]['ephy_file_path'])
+    if current_sorter_param[0]['ephy_file_extension'] == 'folder':
+        recording.set_channel_gains(1)
+        recording.annotate(is_filtered=True)
+        recording.set_channel_offsets(0)
+        
+    return recording
+
+def load_probe(current_sorter_param):
+    probe = read_probeinterface(current_sorter_param[0]['probe_file_path'])
+    probe = probe.probes[0]
+    return probe
+
+def launch_sorting(current_sorter_param, main_window, state, analyzer, recording, probe):
     
     try:
                
@@ -110,14 +128,8 @@ def launch_sorting(current_sorter_param, main_window, state, analyzer):
         current_time = datetime.datetime.now()
 
         current_sorter_param[0]['time of analysis'] = current_time.strftime("%Y-%m-%d %H:%M:%S")
-        
-        #############################################
-        recording = ephy_extension_dict[current_sorter_param[0]['ephy_file_extension']](current_sorter_param[0]['ephy_file_path'])
-        main_window[0]['progress_text'].update('Assigning probe')
-        probe = read_probeinterface(current_sorter_param[0]['probe_file_path'])
-        probe = probe.probes[0]
+                
         recording = recording.set_probe(probe)
-        #############################################
         
         #############################################
         if current_sorter_param[0]['preprocessing'] is True:
@@ -154,8 +166,7 @@ def launch_sorting(current_sorter_param, main_window, state, analyzer):
             plot_sorting_summary(analyzer, 
                                  current_sorter_param[0]['name'], 
                                  save_path=f"{current_sorter_param[0]['output_folder_path']}/{current_sorter_param[0]['name']}/base sorting", 
-                                 trial_len=recording.get_duration(), 
-                                 acelerate=False,)
+                                 trial_len=recording.get_duration())
             current_sorter_param[0]['sorting'] = 'Done'
             
             with open(f"{current_sorter_param[0]['output_folder_path']}/{current_sorter_param[0]['name']}/base sorting/pipeline_param.json", "w") as outfile: 
@@ -180,8 +191,7 @@ def launch_sorting(current_sorter_param, main_window, state, analyzer):
             plot_sorting_summary(analyzer, 
                                  current_sorter_param[0]['name'], 
                                  save_path=f"{current_sorter_param[0]['output_folder_path']}/{current_sorter_param[0]['name']}/custom cleaning", 
-                                 trial_len=recording.get_duration(), 
-                                 acelerate=False,)
+                                 trial_len=recording.get_duration())
             
             current_sorter_param[0]['custom_cleaning'] = 'Done'            
             with open(f"{current_sorter_param[0]['output_folder_path']}/{current_sorter_param[0]['name']}/custom cleaning/pipeline_param.json", "w") as outfile: 
@@ -238,13 +248,12 @@ def launch_sorting(current_sorter_param, main_window, state, analyzer):
                 current_sorter_param[0]['manual_curation'] = False
                 with open(f"{current_sorter_param[0]['output_folder_path']}/{current_sorter_param[0]['name']}/custom cleaning/pipeline_param.json", "w") as outfile: 
                     json.dump(current_sorter_param[0], outfile)
-                if not current_sorter_param[0]["manual_curation_param"]['from_loading']:
-                    shutil.rmtree(f"{current_sorter_param[0]['output_folder_path']}/{current_sorter_param[0]['name']}/manual curation")
                 
         if isinstance(e, DockerException):
             main_window[0].write_event_value('popup_error', "Docker Desktop need to be open for sorting")
         
         unlock_analysis(main_window, current_sorter_param, trigger_by_error=True)
+        main_window[0]['progress_text'].update(f'Error: {e}')
         
         return analyzer
             
@@ -254,6 +263,8 @@ def sorting_main():
     main_window = [None]
     current_sorter_param = [get_default_param()]
     analyzer = None
+    recording = None
+    probe = None
     
     gui_thread = threading.Thread(target=main_gui_maker, args=(main_window, state, current_sorter_param, ephy_extension_dict))
     gui_thread.start()
@@ -262,13 +273,21 @@ def sorting_main():
         if state[0] == 'stop':
             break
         elif state[0] == 'Load analysis':
-            analyzer = load_analysis(main_window, current_sorter_param)
+            analyzer, recording, probe = load_analysis(main_window, current_sorter_param)
+            state[0] = None
+            
+        elif state[0] == 'load_recording':
+            recording = load_recording(current_sorter_param)
             state[0] = None
         
+        elif state[0] == 'load_probe':
+            probe = load_probe(current_sorter_param)
+            state[0] = None
+            
         elif state[0] == 'launch': 
             main_window[0]['launch_sorting_button'].update(disabled=True)
 
-            analyzer = launch_sorting(current_sorter_param, main_window, state, analyzer)
+            analyzer = launch_sorting(current_sorter_param, main_window, state, analyzer, recording, probe)
             
             main_window[0]['launch_sorting_button'].update(disabled=False)
             

@@ -7,7 +7,8 @@ Created on Mon Oct 16 17:09:48 2023
 from spikeinterface.core import create_sorting_analyzer
 from spikeinterface.curation import CurationSorting, SplitUnitSorting
 from spikeinterface.postprocessing import align_sorting
-import spikeinterface as si  # import core only
+from spikeinterface import get_template_extremum_channel_peak_shift
+import spikeinterface.qualitymetrics as sqm
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -20,6 +21,7 @@ from sklearn.decomposition import PCA
 from scipy.cluster.hierarchy import linkage, fcluster
 import pickle
 import shutil
+import multiprocessing as mp
 
 from additional.toolbox import load_or_compute_extension
 
@@ -163,11 +165,48 @@ def remove_edge_artefact(analyzer, cs, df_cleaning_summary, save_folder=None, le
 
     return clean_analyzer, df_cleaning_summary
 
+def compute_best_split(waveforms, method, n_components, max_split, threshold, unit_id, unit_idx, verbose=False, window=None, total_numbder_of_unit=None):
+    
+    if method == 'phate':
+        phate_operator = phate.PHATE(n_jobs=-2)
+        phate_operator.set_params(knn=5, n_components=n_components, verbose=False)
+        principal_components = phate_operator.fit_transform(waveforms)
+    elif method == 'pca':
+        pca = PCA(n_components=n_components)
+        principal_components = pca.fit_transform(waveforms)
+
+    linkage_matrix = linkage(principal_components, method='ward')
+    
+    best_silhouette_score = -1
+    for num_clusters in range(2, max_split+1):
+        clusters = fcluster(linkage_matrix, t=num_clusters, criterion='maxclust')
+        silhouette = silhouette_score(waveforms, clusters)
+        if silhouette > best_silhouette_score:
+            best_silhouette_score = silhouette
+            group_array = clusters
+    
+    group_array = group_array - 1 #spikeinterface need to start from 0 not 1
+    if best_silhouette_score < threshold:
+        group_array = np.zeros(len(group_array))
+    
+    if verbose:
+        if len(set(group_array)) > 1:
+            print(f'Unit {unit_idx}/{total_numbder_of_unit}--> {len(set(group_array))} split')
+            window['progress_text'].update(f'Unit {unit_idx}/{total_numbder_of_unit}--> {len(set(group_array))} split')
+    else:
+        print(f'Unit {unit_idx}/{total_numbder_of_unit}--> No split performed')
+        window['progress_text'].update(f'Unit {unit_idx}/{total_numbder_of_unit}--> No split performed')
+            
+    return unit_id, unit_idx, principal_components, group_array, best_silhouette_score
+
+
+def parallel_compute_best_split(args):
+    return compute_best_split(*args)
 
 def split_noise_from_unit(analyzer, cs, window, df_cleaning_summary, min_spike_per_unit=50, 
                           threshold=0.2, max_split=10, 
                           save_folder=None, save_plot=None, 
-                          method='phate', n_components=10,
+                          method='phate', n_components=10, accelerate=False,
                           **kwargs):
     
     load_or_compute_extension(analyzer, ['random_spikes', 'waveforms'], extension_params={"random_spikes":{"method": "all"}})
@@ -175,38 +214,33 @@ def split_noise_from_unit(analyzer, cs, window, df_cleaning_summary, min_spike_p
     new_df_row_list = []
     unit_id_list = list(analyzer.unit_ids)
     unit_id_list.sort()
+    
+    args = []
     for unit_idx, unit_id in enumerate(unit_id_list):
         waveforms = analyzer.get_extension('waveforms').get_waveforms_one_unit(unit_id=unit_id, force_dense=True)
         waveforms = get_highest_amplitude_channel(waveforms)
         
         if waveforms.shape[0] > min_spike_per_unit:
-            if method == 'phate':
-                phate_operator = phate.PHATE(n_jobs=-2)
-                phate_operator.set_params(knn=5, n_components=n_components, verbose=False)
-                principal_components = phate_operator.fit_transform(waveforms)
-            elif method == 'pca':
-                pca = PCA(n_components=n_components)
-                principal_components = pca.fit_transform(waveforms)
-
-            linkage_matrix = linkage(principal_components, method='ward')
+            args.append([waveforms, method, n_components, max_split, threshold, unit_id, unit_idx])        
+        else:
+            cs.remove_unit(unit_id=unit_id)
+            print(f'Unit {unit_idx}/{len(analyzer.unit_ids)}--> Unit removed for not enought spike')
+            window['progress_text'].update(f'Unit {unit_idx}/{len(analyzer.unit_ids)}--> Unit removed for not enought spike')
+    
+    if accelerate:
+        # Create a multiprocessing Pool
+        with mp.Pool(mp.cpu_count()) as pool:
+            results = pool.map(parallel_compute_best_split, args)
+    else:
+        results = []
+        for arg in args:
+            arg = arg + [True, window, len(analyzer.unit_ids)]
+            results.append(compute_best_split(*arg))
+    
+    for unit_id, unit_idx, principal_components, group_array, best_silhouette_score in results:
             
-            best_silhouette_score = -1
-            for num_clusters in range(2, max_split+1):
-                clusters = fcluster(linkage_matrix, t=num_clusters, criterion='maxclust')
-                silhouette = silhouette_score(waveforms, clusters)
-                if silhouette > best_silhouette_score:
-                    best_silhouette_score = silhouette
-                    group_array = clusters
-            
-            group_array = group_array - 1 #spikeinterface need to start from 0 not 1
-            if best_silhouette_score < threshold:
-                group_array = np.zeros(len(group_array))
-            
-                    
             if len(set(group_array)) > 1:
-                print(f'Unit {unit_idx}/{len(analyzer.unit_ids)}--> {len(set(group_array))} split')
-                window['progress_text'].update(f'Unit {unit_idx}/{len(analyzer.unit_ids)}--> {len(set(group_array))} split')
-                
+               
                 cs, new_unit_id_list = perform_split(cs, unit_id, group_array, remove_first_index_unit=False)
 
                 
@@ -216,10 +250,7 @@ def split_noise_from_unit(analyzer, cs, window, df_cleaning_summary, min_spike_p
                     new_df = current_unit_df_cleaning_summary.copy()
                     new_df['Remove noise by splitting'] = [new_unit_id]
                     new_df_row_list.append(new_df)
-            else:
-                print(f'Unit {unit_idx}/{len(analyzer.unit_ids)}--> No split performed')
-                window['progress_text'].update(f'Unit {unit_idx}/{len(analyzer.unit_ids)}--> No split performed')
-                
+            else:                
                 current_unit_df_cleaning_summary = df_cleaning_summary[df_cleaning_summary[df_cleaning_summary.columns[-1]] == unit_id]
                 assert len(current_unit_df_cleaning_summary) == 1, "there cannot be two unit with the same id"
                 new_df = current_unit_df_cleaning_summary.copy()
@@ -243,9 +274,11 @@ def split_noise_from_unit(analyzer, cs, window, df_cleaning_summary, min_spike_p
                 for group in np.unique(group_array):
                     mask = group_array == group
                     ax.scatter(principal_components[mask, 0],
-                               principal_components[mask, 1], 
-                               principal_components[mask, 2], 
-                               label=f'Group {group}')
+                                principal_components[mask, 1], 
+                                principal_components[mask, 2], 
+                                label=f'Group {group}')
+                    waveforms = analyzer.get_extension('waveforms').get_waveforms_one_unit(unit_id=unit_id, force_dense=True)
+                    waveforms = get_highest_amplitude_channel(waveforms)
                     ax_indx += 1
                     current_ax_regular = fig_cluster.add_subplot(int(f'{number_ofcluster}1{ax_indx}'))
                     current_ax_regular.set_title(f'{group}, number of spikes: {len(waveforms[mask])}')
@@ -258,29 +291,24 @@ def split_noise_from_unit(analyzer, cs, window, df_cleaning_summary, min_spike_p
                 fig.savefig(f'{save_plot}/cleaning_summary/splitting_summary/Unit{unit_id}_3d')
                 fig_cluster.savefig(f'{save_plot}/cleaning_summary/splitting_summary/Unit{unit_id}_ind_cluster')
                 plt.close('all')
-                
-        else:
-            cs.remove_unit(unit_id=unit_id)
-            print(f'Unit {unit_idx}/{len(analyzer.unit_ids)}--> Unit removed for not enought spike')
-            window['progress_text'].update(f'Unit {unit_idx}/{len(analyzer.unit_ids)}--> Unit removed for not enought spike')
-    
+
     df_cleaning_summary = pd.concat(new_df_row_list)            
     clean_sorting = cs.sorting
     if save_folder is not None:
         clean_analyzer = create_sorting_analyzer(sorting=clean_sorting,
-                                               recording=analyzer.recording,
-                                               format="binary_folder",
-                                               return_scaled=True, # this is the default to attempt to return scaled
-                                               folder=f"{save_folder}/SortingAnalyzer", 
-                                               overwrite=True,
-                                               sparse=False
-                                               )
+                                                recording=analyzer.recording,
+                                                format="binary_folder",
+                                                return_scaled=True, # this is the default to attempt to return scaled
+                                                folder=f"{save_folder}/SortingAnalyzer", 
+                                                overwrite=True,
+                                                sparse=False
+                                                )
     else:
         clean_analyzer = create_sorting_analyzer(sorting=clean_sorting,
-                                               recording=analyzer.recording, 
-                                               format="memory",
-                                               sparse=False
-                                               )
+                                                recording=analyzer.recording, 
+                                                format="memory",
+                                                sparse=False
+                                                )
     return clean_analyzer, df_cleaning_summary
 
 def rename_unit(recording, cs, window, df_cleaning_summary, save_folder=None):
@@ -332,7 +360,7 @@ def rename_unit(recording, cs, window, df_cleaning_summary, save_folder=None):
 def align_spike(analyzer, df_cleaning_summary, save_folder=None):
     
     load_or_compute_extension(analyzer,  ['random_spikes', 'waveforms', 'templates'], extension_params={"random_spikes":{"method": "all"}})
-    unit_peak_shifts = si.get_template_extremum_channel_peak_shift(analyzer, peak_sign='neg')
+    unit_peak_shifts = get_template_extremum_channel_peak_shift(analyzer, peak_sign='neg')
     clean_sorting = align_sorting(analyzer.sorting, unit_peak_shifts) 
     
     new_df_row_list = []
@@ -341,6 +369,49 @@ def align_spike(analyzer, df_cleaning_summary, save_folder=None):
         assert len(current_unit_df_cleaning_summary) == 1, "there cannot be two unit with the same id"
         new_df = current_unit_df_cleaning_summary.copy()
         new_df['Align spikes'] = [unit_id]
+        new_df_row_list.append(new_df)
+    df_cleaning_summary = pd.concat(new_df_row_list) 
+    
+    if save_folder is not None:
+        clean_analyzer = create_sorting_analyzer(sorting=clean_sorting,
+                                               recording=analyzer.recording,
+                                               format="binary_folder",
+                                               return_scaled=True, # this is the default to attempt to return scaled
+                                               folder=f"{save_folder}/SortingAnalyzer", 
+                                               overwrite=True,
+                                               sparse=False, 
+                                               )
+    else:
+        clean_analyzer = create_sorting_analyzer(sorting=clean_sorting,
+                                               recording=analyzer.recording, 
+                                               format="memory",
+                                               sparse=False
+                                               )
+
+    return clean_analyzer, df_cleaning_summary
+
+def remove_by_metric(analyzer, cs, window, df_cleaning_summary, isi_violation_activate=True, isi_threshold_ms=1, isi_violatio_thr=0.2, save_folder=None, **kwargs):
+    
+    bad_units = []
+    if isi_violation_activate:
+        isi_violations_ratio, _ = sqm.compute_isi_violations(sorting_analyzer=analyzer, isi_threshold_ms=isi_threshold_ms)
+        isi_bad_units = []
+        for unit, unit_violatio_ratio in isi_violations_ratio.items():
+            if unit_violatio_ratio >= isi_violatio_thr:
+                isi_bad_units.append(unit)
+        print(f'Units {isi_bad_units} removed for isi violation')
+        window['progress_text'].update(f'Units {isi_bad_units} removed for isi violation')
+        bad_units = list(set(bad_units + isi_bad_units))
+        
+    cs.remove_units(bad_units)
+    clean_sorting = cs.sorting
+
+    new_df_row_list = []
+    for unit_id in clean_sorting.get_unit_ids():
+        current_unit_df_cleaning_summary = df_cleaning_summary[df_cleaning_summary[df_cleaning_summary.columns[-1]] == unit_id]
+        assert len(current_unit_df_cleaning_summary) == 1, "there cannot be two unit with the same id"
+        new_df = current_unit_df_cleaning_summary.copy()
+        new_df['Remove bad units with metric'] = [unit_id]
         new_df_row_list.append(new_df)
     df_cleaning_summary = pd.concat(new_df_row_list) 
     
@@ -516,6 +587,17 @@ def clean_unit(analyzer, cleaning_param, window, save_folder=None, sorter_name=N
         if df_cleaning_summary is None or 'Remove noise by splitting' not in df_cleaning_summary.columns:
             window['progress_text'].update('Splitting multi unit')
             analyzer, df_cleaning_summary = split_noise_from_unit(analyzer, cs, window, df_cleaning_summary, save_plot=save_plot, **cleaning_param['split_multi_unit'])
+            cs = CurationSorting(parent_sorting=analyzer.sorting)
+            save_temp_file(temp_file_path, df_cleaning_summary=df_cleaning_summary)
+        else:
+            print('Loading from files')
+        print('##################################')
+    
+    if cleaning_param['remove_by_metric']['activate']:
+        print('\n## Remove bad units with metric ##')
+        if df_cleaning_summary is None or 'Remove bad units with metric' not in df_cleaning_summary.columns:
+            window['progress_text'].update('Remove bad units with metric')
+            analyzer, df_cleaning_summary = remove_by_metric(analyzer, cs, window, df_cleaning_summary, **cleaning_param['remove_by_metric'])
             save_temp_file(temp_file_path, df_cleaning_summary=df_cleaning_summary)
         else:
             print('Loading from files')

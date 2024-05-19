@@ -80,12 +80,15 @@ def lock_analysis(window, current_sorter_param):
             SetLED(window, 'led_Custom', 'green')
         
         window[0]['custom_cleaning_checkbox'].update(True)
-        window[0]['custom_cleaning_checkbox'].update(disabled=True)
+        if not (current_sorter_param[0]['from_loading'] and (current_sorter_param[0]['custom_cleaning'] != 'Done' or current_sorter_param[0]['manual_curation'] !='Done')):
+            window[0]['custom_cleaning_checkbox'].update(disabled=True)
+            
         if current_sorter_param[0]['manual_curation']:
             if current_sorter_param[0]['manual_curation'] == 'Done':
                 SetLED(window, 'led_Manual', 'green')
             window[0]['manual_curation_checkbox'].update(True)
-            window[0]['manual_curation_checkbox'].update(disabled=True)
+            if not (current_sorter_param[0]['from_loading'] and current_sorter_param[0]['manual_curation'] !='Done'):
+                window[0]['manual_curation_checkbox'].update(disabled=True)
         else:
             window[0]['manual_curation_checkbox'].update(False)
             window[0]['manual_curation_checkbox'].update(disabled=False)
@@ -123,7 +126,7 @@ def make_window(current_sorter_param):
     
     sorter_param_dict =  make_sorter_param_dict()
     
-    main_menu_layout = [['File', ['Load analysis', 'Export spike time', 'Export Template']], 
+    main_menu_layout = [['File', ['Load ephy folder', 'Load analysis', 'Export spike time', 'Export Template']], 
                         # ['Edit',['Import metadata', 'Ephy file tool', 'Probe tool']],
                         ['Parameters',['Preprocessing parameter', 'Sorter parameter', 'Custom cleaning parameter']],
                         ]
@@ -235,15 +238,19 @@ def main_gui_maker(main_window, state, current_sorter_param, ephy_extension_dict
                 if event == 'Load analysis':
                     state[0] = 'Load analysis'
                     
-                if event == 'Load_ephy_file':
-                    path = select_folder_file(mode='file')
+                if event == 'Load_ephy_file' or event == 'Load ephy folder':
+                    if event == 'Load_ephy_file':
+                        path = select_folder_file(mode='file')
+                    else:
+                        path = select_folder_file(mode='folder')
                     if path is not None:
-                        if path.split('.')[-1] not in ephy_extension_dict.keys():
-                            sg.popup_error(f"Unsuported ephy file format: {path.split('.')[-1]}")
+                        extention = path.split('.')[-1] if event == 'Load_ephy_file' else 'folder'
+                        if extention not in ephy_extension_dict.keys():
+                            sg.popup_error(f"Unsuported ephy file format: {extention}")
                             if not current_sorter_param[0]['from_loading']:
                                 main_window[0]['Load_ephy_file'].update(button_color='red')
                         else:
-                            current_sorter_param[0]['ephy_file_extension'] = path.split('.')[-1]
+                            current_sorter_param[0]['ephy_file_extension'] = extention
                             current_sorter_param[0]['ephy_file_path'] = path
                             main_window[0]['Load_ephy_file'].update(button_color='green')
                             if current_sorter_param[0]['from_loading'] is not None:
@@ -257,6 +264,9 @@ def main_gui_maker(main_window, state, current_sorter_param, ephy_extension_dict
                                 main_window[0]['Select_output_folder'].update(button_color='red')
                                 del current_sorter_param[0]['probe_file_path'], current_sorter_param[0]['output_folder_path']
                                 
+                            state[0] = "load_recording"
+                        
+                                
                         
                 if event == 'Load_probe_file':
                     path = select_folder_file(mode='file')
@@ -267,6 +277,7 @@ def main_gui_maker(main_window, state, current_sorter_param, ephy_extension_dict
                         else:
                             current_sorter_param[0]['probe_file_path'] = path
                             main_window[0]['Load_probe_file'].update(button_color='green')
+                            state[0] = 'load_probe'
                 
                 if event == 'Select_output_folder':
                     path = select_folder_file(mode='folder')

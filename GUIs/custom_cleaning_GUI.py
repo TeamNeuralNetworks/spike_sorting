@@ -28,7 +28,11 @@ def make_config_custom_cleaning_param_window(custom_cleaning_param, default_inpu
                                [sg.T('Maximum number of split', tooltip='Maximum number of split per unit'), sg.I(custom_cleaning_param['split_multi_unit']['max_split'], size=default_input_size, k=('split_multi_unit', 'max_split'), tooltip='Maximum number of split per unit')],
                                [sg.T('Minimum spike per unit', tooltip='Minimum number of spikes per unit (if inferior the unit will be removed)'), sg.I(custom_cleaning_param['split_multi_unit']['min_spike_per_unit'], size=default_input_size, k=('split_multi_unit', 'min_spike_per_unit'), tooltip='Minimum number of spikes per unit (if inferior the unit will be removed)')],#TODO probably better to put that in addictional filter or something
                                ]
-    
+    remove_by_metric_layout = [[sg.T('Activate', tooltip='Remove bad unit using metrics'), sg.Checkbox('', default=custom_cleaning_param['remove_by_metric']['activate'], k=('remove_by_metric', 'activate'), tooltip='Remove bad unit using metrics')],
+                               [sg.T('Isi violation', tooltip='Isi violation conrespond to spikes that occur during the refractoryperiod of the neuron and is a indication of contamiation of the unit'), sg.Checkbox('', default=custom_cleaning_param['remove_by_metric']['isi_violation_activate'], k=('remove_by_metric', 'isi_violation_activate'), tooltip='Isi violation conrespond to spikes that occur during the refractoryperiod of the neuron and is a indication of contamiation of the unit'),
+                               sg.T('Refractory period', tooltip='interval in ms where two spikes are concidered to be in the isi violation'), sg.I(custom_cleaning_param['remove_by_metric']['isi_threshold_ms'], k=('remove_by_metric', 'isi_threshold_ms'), tooltip='interval in ms where two spikes are concidered to be in the isi violation', size=default_input_size), sg.T('ms'),
+                               sg.T('Violation ratio', tooltip='Inter sike interval violation ratio'), sg.I(custom_cleaning_param['remove_by_metric']['isi_violation_ratio'], k=('remove_by_metric', 'isi_violation_ratio'), tooltip='Initer sike interval violation ratio', size=default_input_size)],
+                               ]
     additional_param_layout = [[sg.T('Rename units', tooltip='If selected will rename units (if 10 units remain at the end of the pipeline the units number will go from 0 to 10)'), sg.Checkbox('', default=custom_cleaning_param['rename_unit']['activate'], k=('rename_unit', 'activate'), tooltip='If selected will rename units (if 10 units remain at the end of the pipeline the units number will go from 0 to 10)')],
                                [sg.T('Plot cleaning summary', tooltip='If selected will plot a summary of the cleaning done for each remaining unit'), sg.Checkbox('', default=custom_cleaning_param['plot_cleaning_summary']['activate'], k=('plot_cleaning_summary', 'activate'), tooltip='If selected will plot a summary of the cleaning done for each remaining unit')],
                                 ]
@@ -37,6 +41,7 @@ def make_config_custom_cleaning_param_window(custom_cleaning_param, default_inpu
             [sg.Frame('Remove edge artefact', remove_edge_artefact_layout, tooltip='If activated, will remove spikes at the edge of the recording')],
             [sg.Frame('Remove big artefact', remove_big_artefact_layout, tooltip='If activated, will remove spikes which amplitude is too big to be a real spike')],
             [sg.Frame('Split multi unit', split_multi_unit_layout, tooltip='If activated, will split units containing 2 or more population of spikes waveform profil')],
+            [sg.Frame('Remove bad unit with metrics', remove_by_metric_layout, tooltip='If activated, will remove unit witch metrics exced a certain threshold')],
             [sg.Frame('Additional parameters', additional_param_layout, tooltip='Additional parmaters used at the end of the pipeline')],
             [sg.B('Save', k='save_custom_cleaning_param_button'), sg.B('Reset', k='reset_custom_cleaning_param_button')],
             ]

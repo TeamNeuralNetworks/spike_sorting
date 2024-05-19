@@ -19,7 +19,7 @@ import numpy as np
 import math 
 from scipy import stats
 import os
-import multiprocessing
+import multiprocessing as mp
 import matplotlib.pyplot as plt
 from matplotlib.gridspec import GridSpec
 import quantities as pq
@@ -28,40 +28,6 @@ from tqdm import tqdm
 from curation.clean_unit import get_highest_amplitude_channel
 from additional.toolbox import load_or_compute_extension
 
-
-def plot_sorting_summary(analyzer, sorter_name, save_extention=False, save_path=None, trial_len=9, acelerate=True):
-    load_or_compute_extension(analyzer, ['random_spikes', 'waveforms', 'templates', 'spike_locations'], save_extention)
-    
-    max_unit_amplitude = 0
-    min_unit_amplitude = 0
-    
-    for unit_id, template in get_template_amplitudes(analyzer, peak_sign='pos').items():
-        current_max_amplitude = template.max()
-        if current_max_amplitude > max_unit_amplitude:
-            max_unit_amplitude = current_max_amplitude
-            
-    for unit_id, template in get_template_amplitudes(analyzer, peak_sign='neg').items():
-        current_min_amplitude = -1*template.max()
-        if current_min_amplitude < min_unit_amplitude:
-            min_unit_amplitude = current_min_amplitude
-            
-    ylim_margin = (max_unit_amplitude-min_unit_amplitude)*0.01
-    ylim = (min_unit_amplitude-ylim_margin, max_unit_amplitude+ylim_margin)
-    
-    if acelerate:
-        num_processes = multiprocessing.cpu_count()  # You can adjust this based on your CPU
-        pool = multiprocessing.Pool(processes=num_processes)
-    
-    for unit_id in tqdm(analyzer.unit_ids, desc='Plot sorting summary'):
-        if acelerate:
-            pool.apply_async(plot_summary_for_unit, (unit_id, analyzer, sorter_name, ylim, None, save_path, trial_len))
-        else:
-            plot_summary_for_unit(unit_id, analyzer, sorter_name, ylim, None, save_path, trial_len)
-
-    if acelerate:
-        # Close the pool and wait for all processes to finish
-        pool.close()
-        pool.join()
 
 def plot_summary_for_unit(unit_id, analyzer, sorter_name, ylim=None, unit_for_plot_name=None, save_path=None, trial_len=9):
         
@@ -163,4 +129,34 @@ def plot_summary_for_unit(unit_id, analyzer, sorter_name, ylim=None, unit_for_pl
         os.makedirs(fr'{save_path}\Unit_summary_plot\png_version', exist_ok=True)
         plt.savefig(fr'{save_path}\Unit_summary_plot\png_version\Unit_{int(unit_for_plot_name)}.png')
         plt.close()
-        
+
+def parallel_plot_summary(args):
+    return plot_summary_for_unit(*args)
+
+def plot_sorting_summary(analyzer, sorter_name, save_extention=False, save_path=None, trial_len=9, acelerate=False):
+    load_or_compute_extension(analyzer, ['random_spikes', 'waveforms', 'templates', 'spike_locations'], save_extention)
+    
+    max_unit_amplitude = 0
+    min_unit_amplitude = 0
+    
+    for unit_id, template in get_template_amplitudes(analyzer, peak_sign='pos').items():
+        current_max_amplitude = template.max()
+        if current_max_amplitude > max_unit_amplitude:
+            max_unit_amplitude = current_max_amplitude
+            
+    for unit_id, template in get_template_amplitudes(analyzer, peak_sign='neg').items():
+        current_min_amplitude = -1*template.max()
+        if current_min_amplitude < min_unit_amplitude:
+            min_unit_amplitude = current_min_amplitude
+            
+    ylim_margin = (max_unit_amplitude-min_unit_amplitude)*0.01
+    ylim = (min_unit_amplitude-ylim_margin, max_unit_amplitude+ylim_margin)
+    
+    if acelerate:
+         args = [(unit_id, analyzer, sorter_name, ylim, None, save_path, trial_len) for unit_id in analyzer.unit_ids]
+         with mp.Pool(mp.cpu_count()) as pool:
+             pool.map(parallel_plot_summary, args)
+    else:
+        for unit_id in tqdm(analyzer.unit_ids, desc='Plot sorting summary'):
+            plot_summary_for_unit(unit_id, analyzer, sorter_name, ylim, None, save_path, trial_len)
+            
