@@ -80,7 +80,7 @@ def remove_big_artefact(analyzer, cs, df_cleaning_summary, threshold, method='ma
     load_or_compute_extension(analyzer, ['random_spikes', 'waveforms'], extension_params={"random_spikes":{"method": "all"}})
     
     new_df_row_list = []
-    for unit_id in tqdm(analyzer.unit_ids, desc='Remove big artefact'):
+    for unit_id in tqdm(analyzer.unit_ids, desc='Remove big artefact', bar_format='{l_bar}{bar}\n'):
         current_waveforms = analyzer.get_extension('waveforms').get_waveforms_one_unit(unit_id=unit_id, force_dense=True)
         #select the highs channel for each spike
         
@@ -131,7 +131,7 @@ def remove_edge_artefact(analyzer, cs, df_cleaning_summary, save_folder=None, le
     
     len_recording = analyzer.get_total_samples()
         
-    for unit_id in tqdm(analyzer.unit_ids, desc='Remove edge artefact'):
+    for unit_id in tqdm(analyzer.unit_ids, desc='Remove edge artefact', bar_format='{l_bar}{bar}\n'):
         spikes = analyzer.sorting.get_unit_spike_train(unit_id=unit_id)
         spikes_indx = np.arange(0, len(spikes), 1)
         spikes_indx = spikes_indx[(spikes > (lenght_to_remove*(sampling_frequency/1000))) & (spikes < (len_recording-(lenght_to_remove*(sampling_frequency/1000))))]
@@ -280,7 +280,7 @@ def split_noise_from_unit(analyzer, cs, window, df_cleaning_summary, min_spike_p
                     waveforms = analyzer.get_extension('waveforms').get_waveforms_one_unit(unit_id=unit_id, force_dense=True)
                     waveforms = get_highest_amplitude_channel(waveforms)
                     ax_indx += 1
-                    current_ax_regular = fig_cluster.add_subplot(int(f'{number_ofcluster}1{ax_indx}'))
+                    current_ax_regular = fig_cluster.add_subplot(number_ofcluster, 1, ax_indx)
                     current_ax_regular.set_title(f'{group}, number of spikes: {len(waveforms[mask])}')
                     current_ax_regular.plot(waveforms[mask].T, color='k', alpha=0.1)
                     current_ax_regular.plot(np.median(waveforms[mask].T, axis=1), color='r', alpha=1)
@@ -438,7 +438,7 @@ def plot_cleaning_summary(temp_file_path, sorter_name, save_plot=None):
     *_, df_cleaning_summary, plot_data_dict = load_temp_file(temp_file_path, load_df_cleaning_summary=True, load_plot_data_dict=True)
     
     last_cleaning_performed = df_cleaning_summary.columns[-1]
-    for unit_id in tqdm(df_cleaning_summary[last_cleaning_performed], desc='Plot cleaning summary'):
+    for unit_id in tqdm(df_cleaning_summary[last_cleaning_performed], desc='Plot cleaning summary', bar_format='{l_bar}{bar}\n'):
 
         title = f'Unit: {unit_id}, {sorter_name}\n'
         for sup_title, df_cleaning_summary_column_name, data_dict, color in plot_data_dict['figure_data']:
@@ -616,11 +616,12 @@ def clean_unit(analyzer, cleaning_param, window, save_folder=None, sorter_name=N
             print('Loading from files')
         print('##################################')
     
-    if save_plot is not None:
-        print('\n###### Plot cleaning summary #####')
-        window['progress_text'].update('Sorting Summary plot in progress')
-        plot_cleaning_summary(temp_file_path, sorter_name, save_plot=save_plot)
-        print('##################################')
+    #TODO buged, it seem that units are not properly tracked at each step and il will also be nice to also plot unit that has been remeved to allow manual confirmation that the removing was proper
+    # if save_plot is not None:
+    #     print('\n###### Plot cleaning summary #####')
+    #     window['progress_text'].update('Sorting Summary plot in progress')
+    #     plot_cleaning_summary(temp_file_path, sorter_name, save_plot=save_plot)
+    #     print('##################################')
     
     erase_temp_file(temp_file_path)
     return analyzer   

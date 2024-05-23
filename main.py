@@ -4,12 +4,11 @@ Created on Tue May  7 10:26:45 2024
 
 @author: Pierre.LE-CABEC
 """
-from spikeinterface.extractors import read_intan
+
 from spikeinterface.sorters import run_sorter
-from spikeinterface.core import create_sorting_analyzer, BinaryFolderRecording
+from spikeinterface.core import create_sorting_analyzer
 from probeinterface.io import read_probeinterface
 from spikeinterface.core import load_sorting_analyzer
-
 
 import threading
 import time
@@ -22,21 +21,19 @@ import warnings
 import os
 import pandas as pd 
 import numpy as np
+import copy
 
 from plotting.plot_unit_summary import plot_sorting_summary
 from curation.clean_unit import clean_unit
 from curation.manual_curation import manual_curation_module
 from curation.preprocessing import apply_preprocessing
 from GUIs.Main_GUI import main_gui_maker, led_loading_animation, SetLED, unlock_analysis, lock_analysis, select_folder_file
+from GUIs.additional_recording_info_GUI import ephy_extension_dict
 from additional.toolbox import get_default_param, load_or_compute_extension
 
 warnings.filterwarnings('ignore', category=FutureWarning)
 warnings.filterwarnings('ignore', category=RuntimeWarning)
 warnings.filterwarnings('ignore', category=UserWarning)
-
-ephy_extension_dict = {'rhd': lambda x:read_intan(x, stream_id='0'),
-                       'folder': lambda x:BinaryFolderRecording(x)
-                       }
 
 default_param = {}
 
@@ -104,18 +101,50 @@ def load_analysis(window, current_sorter_param):
             lock_analysis(window, current_sorter_param) 
             return analyzer, recording, probe
 
-def load_recording(current_sorter_param):
-    recording = ephy_extension_dict[current_sorter_param[0]['ephy_file_extension']](current_sorter_param[0]['ephy_file_path'])
-    if current_sorter_param[0]['ephy_file_extension'] == 'folder':
-        recording.set_channel_gains(1)
-        recording.annotate(is_filtered=True)
-        recording.set_channel_offsets(0)
-        
-    return recording
 
-def load_probe(current_sorter_param):
-    probe = read_probeinterface(current_sorter_param[0]['probe_file_path'])
+def load_multiple_recording(main_window, current_sorter_param):
+    try:
+        ephy_path_df = pd.read_excel(current_sorter_param[0]['load_ephy']['ephy_file_path'])
+        
+        recording = []
+        for ephy_row_indx, ephy_row in ephy_path_df.iterrows():
+            recording.append((ephy_row['ephy_recording_path'], ephy_row['probe_file_path'], ephy_row['output_folder_path']))
+    except:
+        main_window[0].write_event_value('popup_error', "Unable to load multi recording excel file (the excel file must contain 3 column 'ephy_recording_path', 'probe_file_path' and 'output_folder_path')")
+    
+    main_window[0]['Load_ephy_file'].update(button_color='green')
+    main_window[0]['Load_probe_file'].update(button_color='green')
+    main_window[0]['Load_probe_file'].update(disabled=True)
+    main_window[0]['Select_output_folder'].update(button_color='green')
+    main_window[0]['Select_output_folder'].update(disabled=True)
+    
+    
+    current_sorter_param[0]['probe_file_path'] = 'to be loaded'
+    current_sorter_param[0]['output_folder_path'] = 'to be loaded'
+    
+    return recording
+    
+
+def load_recording(main_window, current_sorter_param):
+    probe = None
+    recording = ephy_extension_dict[current_sorter_param[0]['load_ephy']['ephy_file_extension']](current_sorter_param[0]['load_ephy']['ephy_file_path'])
+    if current_sorter_param[0]['load_ephy']['gain_to_uV'] is not None:
+        recording.set_channel_gains(current_sorter_param[0]['load_ephy']['gain_to_uV'])
+    if current_sorter_param[0]['load_ephy']['offset_to_uV'] is not None:
+        recording.set_channel_offsets(current_sorter_param[0]['load_ephy']['offset_to_uV'])
+        
+        if os.path.isfile(f"{current_sorter_param[0]['load_ephy']['ephy_file_path']}/probe.json"):
+            current_sorter_param[0]['probe_file_path'] = f"{current_sorter_param[0]['load_ephy']['ephy_file_path']}/probe.json"
+            probe = load_probe(main_window, current_sorter_param[0]['probe_file_path'])
+            
+    main_window[0]['Load_ephy_file'].update(button_color='green')
+        
+    return recording, probe
+
+def load_probe(main_window, probe_path):
+    probe = read_probeinterface(probe_path)
     probe = probe.probes[0]
+    main_window[0]['Load_probe_file'].update(button_color='green')
     return probe
 
 def launch_sorting(current_sorter_param, main_window, state, analyzer, recording, probe):
@@ -133,19 +162,19 @@ def launch_sorting(current_sorter_param, main_window, state, analyzer, recording
         
         #############################################
         if current_sorter_param[0]['preprocessing'] is True:
-            print('\n########### Preprocess recording ###########')
-            main_window[0]['progress_text'].update('Preprocess recording')
+            print('\n########### Preprocess recording #############')
+            # main_window[0]['progress_text'].update('Preprocess recording')
             state[0] = 'preprocessing'
             apply_preprocessing(recording, current_sorter_param[0]['preprocessing_param'], main_window)
             current_sorter_param[0]['preprocessing'] = 'Done'
             SetLED(main_window, 'led_preprocessing', 'green')
             print('Done')
-            print('#############################################')
+            print('###########################################')
 
         #############################################
         if current_sorter_param[0]['sorting'] is True:
-            print('\n############## Running sorter ###############')
-            main_window[0]['progress_text'].update('Sorting in progress')
+            print('\n############# Running sorter #################')
+            # main_window[0]['progress_text'].update('Sorting in progress')
             state[0] = 'sorting'
             sorter = run_sorter(sorter_name=current_sorter_param[0]['name'], recording=recording, docker_image=True, 
                                           output_folder=f"{current_sorter_param[0]['output_folder_path']}/{current_sorter_param[0]['name']}/base sorting/SorterOutput", 
@@ -162,44 +191,48 @@ def launch_sorting(current_sorter_param, main_window, state, analyzer, recording
                                                    folder=f"{current_sorter_param[0]['output_folder_path']}/{current_sorter_param[0]['name']}/base sorting/SortingAnalyzer", 
                                                    sparse=False
                                                    )
-            main_window[0]['progress_text'].update('Sorting Summary plot in progress')
-            plot_sorting_summary(analyzer, 
-                                 current_sorter_param[0]['name'], 
-                                 save_path=f"{current_sorter_param[0]['output_folder_path']}/{current_sorter_param[0]['name']}/base sorting", 
-                                 trial_len=recording.get_duration())
             current_sorter_param[0]['sorting'] = 'Done'
             
             with open(f"{current_sorter_param[0]['output_folder_path']}/{current_sorter_param[0]['name']}/base sorting/pipeline_param.json", "w") as outfile: 
                 json.dump(current_sorter_param[0], outfile)
                 
+            # main_window[0]['progress_text'].update('Sorting Summary plot in progress')
+            plot_sorting_summary(analyzer, 
+                                 current_sorter_param[0]['name'], 
+                                 save_path=f"{current_sorter_param[0]['output_folder_path']}/{current_sorter_param[0]['name']}/base sorting", 
+                                 trial_len=recording.get_duration())
+            
+                
             SetLED(main_window, 'led_sorting', 'green')
             print('Done')
-            print('#############################################')
+            print('##########################################')
         
         
         #############################################
         if current_sorter_param[0]['custom_cleaning'] is True:
-            print('\n############## Custom cleaning ##############')
-            main_window[0]['progress_text'].update('Custom cleaning in progress')
+            print('\n############# Custom cleaning #############')
+            # main_window[0]['progress_text'].update('Custom cleaning in progress')
             state[0] = 'Custom'
             analyzer = clean_unit(analyzer, current_sorter_param[0]['custom_cleaning_param'], main_window[0],
                                     save_folder=f"{current_sorter_param[0]['output_folder_path']}/{current_sorter_param[0]['name']}/custom cleaning",
                                     sorter_name=current_sorter_param[0]['name'], 
                                     save_plot=f"{current_sorter_param[0]['output_folder_path']}/{current_sorter_param[0]['name']}/custom cleaning") 
             
-            main_window[0]['progress_text'].update('Sorting Summary plot in progress')
+            current_sorter_param[0]['custom_cleaning'] = 'Done'            
+            with open(f"{current_sorter_param[0]['output_folder_path']}/{current_sorter_param[0]['name']}/custom cleaning/pipeline_param.json", "w") as outfile: 
+                json.dump(current_sorter_param[0], outfile)
+            
+            # main_window[0]['progress_text'].update('Sorting Summary plot in progress')
             plot_sorting_summary(analyzer, 
                                  current_sorter_param[0]['name'], 
                                  save_path=f"{current_sorter_param[0]['output_folder_path']}/{current_sorter_param[0]['name']}/custom cleaning", 
                                  trial_len=recording.get_duration())
             
-            current_sorter_param[0]['custom_cleaning'] = 'Done'            
-            with open(f"{current_sorter_param[0]['output_folder_path']}/{current_sorter_param[0]['name']}/custom cleaning/pipeline_param.json", "w") as outfile: 
-                json.dump(current_sorter_param[0], outfile)
+            
             
             SetLED(main_window, 'led_Custom', 'green')
             print('Done')
-            print('#############################################')
+            print('##########################################')
         
         
         #############################################
@@ -218,10 +251,11 @@ def launch_sorting(current_sorter_param, main_window, state, analyzer, recording
             
             SetLED(main_window, 'led_Manual', 'green')
             print('Done')
-            print('#############################################')
+            print('##########################################')
         state[0] = None
         
-        main_window[0]['progress_text'].update(f'Analysis pipeline is done: {len(analyzer.unit_ids)} unit has been found')
+        # main_window[0]['progress_text'].update(f'Analysis pipeline is done: {len(analyzer.unit_ids)} unit has been found')
+        print(f'Analysis pipeline is done: {len(analyzer.unit_ids)} unit has been found')
         return analyzer
     
     except Exception as e:
@@ -277,17 +311,42 @@ def sorting_main():
             state[0] = None
             
         elif state[0] == 'load_recording':
-            recording = load_recording(current_sorter_param)
+            recording, probe_temp = load_recording(main_window, current_sorter_param)
+            if probe_temp is not None:
+                probe = probe_temp
+            del probe_temp
             state[0] = None
         
+        elif state[0] == 'load_multi_recording':
+            recording = load_multiple_recording(main_window, current_sorter_param)
+            state[0] = None
+            
         elif state[0] == 'load_probe':
-            probe = load_probe(current_sorter_param)
+            probe = load_probe(main_window, current_sorter_param[0]['probe_file_path'])
             state[0] = None
             
         elif state[0] == 'launch': 
             main_window[0]['launch_sorting_button'].update(disabled=True)
-
-            analyzer = launch_sorting(current_sorter_param, main_window, state, analyzer, recording, probe)
+            
+            if isinstance(recording, list):
+                for indx, (recording_path, probe_file_path, output_folder_path) in enumerate(recording):
+                    main_window[0]['progress_text'].update('Recording {indx+1} out of {len(recording)}')
+                    
+                    SetLED(main_window, 'led_preprocessing', 'red')
+                    SetLED(main_window, 'led_sorting', 'red')
+                    SetLED(main_window, 'led_Custom', 'red')
+                    SetLED(main_window, 'led_Manual', 'red')
+                    
+                    base_current_sorter_param = [copy.deepcopy(current_sorter_param[0])]
+                    base_current_sorter_param[0]['load_ephy']['ephy_file_path'] = recording_path
+                    base_current_sorter_param[0]['output_folder_path'] = output_folder_path
+                    base_current_sorter_param[0]['probe_file_path'] = probe_file_path
+                    current_recording, _ = load_recording(main_window, base_current_sorter_param)
+                    current_probe = load_probe(main_window, probe_file_path)
+                    state[0] = 'launch'
+                    analyzer = launch_sorting(base_current_sorter_param, main_window, state, analyzer, current_recording, current_probe)
+            else:
+                analyzer = launch_sorting(current_sorter_param, main_window, state, analyzer, recording, probe)
             
             main_window[0]['launch_sorting_button'].update(disabled=False)
             

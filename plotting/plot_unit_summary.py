@@ -153,10 +153,10 @@ def plot_sorting_summary(analyzer, sorter_name, save_extention=False, save_path=
     ylim = (min_unit_amplitude-ylim_margin, max_unit_amplitude+ylim_margin)
     
     if acelerate:
-         args = [(unit_id, analyzer, sorter_name, ylim, None, save_path, trial_len) for unit_id in analyzer.unit_ids]
+         args = [(unit_id, analyzer.copy(), sorter_name, ylim, None, save_path, trial_len) for unit_id in analyzer.unit_ids]
          with mp.Pool(mp.cpu_count()) as pool:
              pool.map(parallel_plot_summary, args)
     else:
-        for unit_id in tqdm(analyzer.unit_ids, desc='Plot sorting summary'):
+        for unit_id in tqdm(analyzer.unit_ids, desc='Plot sorting summary', bar_format='{l_bar}{bar}\n'):
             plot_summary_for_unit(unit_id, analyzer, sorter_name, ylim, None, save_path, trial_len)
             
