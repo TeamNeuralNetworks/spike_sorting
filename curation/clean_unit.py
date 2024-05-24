@@ -200,14 +200,10 @@ def compute_best_split(waveforms, method, n_components, max_split, threshold, un
             
     return unit_id, unit_idx, principal_components, group_array, best_silhouette_score
 
-
-def parallel_compute_best_split(args):
-    return compute_best_split(*args)
-
 def split_noise_from_unit(analyzer, cs, window, df_cleaning_summary, min_spike_per_unit=50, 
                           threshold=0.2, max_split=10, 
                           save_folder=None, save_plot=None, 
-                          method='phate', n_components=10, accelerate=False,
+                          method='phate', n_components=10,
                           **kwargs):
     
     load_or_compute_extension(analyzer, ['random_spikes', 'waveforms'], extension_params={"random_spikes":{"method": "all"}})
@@ -216,29 +212,12 @@ def split_noise_from_unit(analyzer, cs, window, df_cleaning_summary, min_spike_p
     unit_id_list = list(analyzer.unit_ids)
     unit_id_list.sort()
     
-    args = []
     for unit_idx, unit_id in enumerate(unit_id_list):
         waveforms = analyzer.get_extension('waveforms').get_waveforms_one_unit(unit_id=unit_id, force_dense=True)
         waveforms = get_highest_amplitude_channel(waveforms)
         
         if waveforms.shape[0] > min_spike_per_unit:
-            args.append([waveforms, method, n_components, max_split, threshold, unit_id, unit_idx])        
-        else:
-            cs.remove_unit(unit_id=unit_id)
-            print(f'Unit {unit_idx}/{len(analyzer.unit_ids)}--> Unit removed for not enought spike')
-            window['progress_text'].update(f'Unit {unit_idx}/{len(analyzer.unit_ids)}--> Unit removed for not enought spike')
-    
-    if accelerate:
-        # Create a multiprocessing Pool
-        with mp.Pool(mp.cpu_count()) as pool:
-            results = pool.map(parallel_compute_best_split, args)
-    else:
-        results = []
-        for arg in args:
-            arg = arg + [True, window, len(analyzer.unit_ids)]
-            results.append(compute_best_split(*arg))
-    
-    for unit_id, unit_idx, principal_components, group_array, best_silhouette_score in results:
+            unit_id, unit_idx, principal_components, group_array, best_silhouette_score = compute_best_split(waveforms, method, n_components, max_split, threshold, unit_id, unit_idx, verbose=True, window=window, total_numbder_of_unit=len(analyzer.unit_ids))
             
             if len(set(group_array)) > 1:
                
@@ -292,6 +271,13 @@ def split_noise_from_unit(analyzer, cs, window, df_cleaning_summary, min_spike_p
                 fig.savefig(f'{save_plot}/cleaning_summary/splitting_summary/Unit{unit_id}_3d')
                 fig_cluster.savefig(f'{save_plot}/cleaning_summary/splitting_summary/Unit{unit_id}_ind_cluster')
                 plt.close('all')
+                
+            del unit_id, unit_idx, principal_components, group_array, best_silhouette_score 
+            
+        else:
+            cs.remove_unit(unit_id=unit_id)
+            print(f'Unit {unit_idx}/{len(analyzer.unit_ids)}--> Unit removed for not enought spike')
+
 
     df_cleaning_summary = pd.concat(new_df_row_list)            
     clean_sorting = cs.sorting
