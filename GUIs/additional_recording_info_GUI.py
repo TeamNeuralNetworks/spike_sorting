@@ -17,11 +17,13 @@ ephy_extension_dict = {'rhd': lambda x:read_intan(x, stream_id='0'),
                        'zarr': lambda x:ZarrRecordingExtractor(x),
                        }
 
+availabled_extention = ['intan', 'binary', 'zarr']
+
 def make_additional_recording_info_window(default_input_size=(5,2), multi_recording_loading=False):
     
     additional_recording_info_layout = [
                                         [sg.T('Recording format'), 
-                                         sg.Combo(ephy_extension_dict.keys(), default_value=list(ephy_extension_dict.keys())[0], k=('load_ephy', 'ephy_file_extension'))],
+                                         sg.Combo(availabled_extention, default_value=availabled_extention[0], k=('load_ephy', 'ephy_file_extension'))],
                                         [sg.T('Gain to µV', tooltip='In what unit the recording is set to (if µV set to 1)'), 
                                          sg.I('1', k=('load_ephy','gain_to_uV'), tooltip='In what unit the recording is set to (if µV set to 1)', size=default_input_size)],
                                         [sg.T('Channel offset', tooltip='How much (in µV) does the signal is offset to 0'), 

@@ -184,6 +184,7 @@ def compute_best_split(waveforms, method, n_components, max_split, threshold, un
         if silhouette > best_silhouette_score:
             best_silhouette_score = silhouette
             group_array = clusters
+        del clusters, silhouette
     
     group_array = group_array - 1 #spikeinterface need to start from 0 not 1
     if best_silhouette_score < threshold:
@@ -192,10 +193,10 @@ def compute_best_split(waveforms, method, n_components, max_split, threshold, un
     if verbose:
         if len(set(group_array)) > 1:
             print(f'Unit {unit_idx}/{total_numbder_of_unit}--> {len(set(group_array))} split')
-            window['progress_text'].update(f'Unit {unit_idx}/{total_numbder_of_unit}--> {len(set(group_array))} split')
-    else:
-        print(f'Unit {unit_idx}/{total_numbder_of_unit}--> No split performed')
-        window['progress_text'].update(f'Unit {unit_idx}/{total_numbder_of_unit}--> No split performed')
+            window['progress_text'].update(f'Unit {unit_idx+1}/{total_numbder_of_unit}--> {len(set(group_array))} split')
+        else:
+            print(f'Unit {unit_idx}/{total_numbder_of_unit}--> No split performed')
+            window['progress_text'].update(f'Unit {unit_idx+1}/{total_numbder_of_unit}--> No split performed')
             
     return unit_id, unit_idx, principal_components, group_array, best_silhouette_score
 

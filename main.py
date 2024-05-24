@@ -200,7 +200,9 @@ def launch_sorting(current_sorter_param, main_window, state, analyzer, recording
             plot_sorting_summary(analyzer, 
                                  current_sorter_param[0]['name'], 
                                  save_path=f"{current_sorter_param[0]['output_folder_path']}/{current_sorter_param[0]['name']}/base sorting", 
-                                 trial_len=recording.get_duration())
+                                 # trial_len=recording.get_duration(),
+                                 trial_len=9,
+                                 )
             
                 
             SetLED(main_window, 'led_sorting', 'green')
@@ -226,7 +228,9 @@ def launch_sorting(current_sorter_param, main_window, state, analyzer, recording
             plot_sorting_summary(analyzer, 
                                  current_sorter_param[0]['name'], 
                                  save_path=f"{current_sorter_param[0]['output_folder_path']}/{current_sorter_param[0]['name']}/custom cleaning", 
-                                 trial_len=recording.get_duration())
+                                 # trial_len=recording.get_duration(),
+                                 trial_len=9,
+                                 )
             
             
             
@@ -242,7 +246,8 @@ def launch_sorting(current_sorter_param, main_window, state, analyzer, recording
             analyzer = manual_curation_module(analyzer, 
                                                 f"{current_sorter_param[0]['output_folder_path']}/{current_sorter_param[0]['name']}/manual curation", 
                                                 current_sorter_param, 
-                                                trial_len=recording.get_duration(),
+                                                # trial_len=recording.get_duration(),
+                                                trial_len=9,
                                                 window = main_window[0]
                                                 )
             current_sorter_param[0]['manual_curation'] = 'Done'
