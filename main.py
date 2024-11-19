@@ -185,12 +185,13 @@ def launch_sorting(current_sorter_param, main_window, state, analyzer, recording
                 raise ValueError('No unit found during sorting')
                 
             analyzer = create_sorting_analyzer(sorting=sorter,
-                                                   recording=recording,
-                                                   format="binary_folder",
-                                                   return_scaled=True, # this is the default to attempt to return scaled
-                                                   folder=f"{current_sorter_param[0]['output_folder_path']}/{current_sorter_param[0]['name']}/base sorting/SortingAnalyzer", 
-                                                   sparse=False
-                                                   )
+                                                recording=recording,
+                                                format="binary_folder",
+                                                return_scaled=True, # this is the default to attempt to return scaled
+                                                folder=f"{current_sorter_param[0]['output_folder_path']}/{current_sorter_param[0]['name']}/base sorting/SortingAnalyzer", 
+                                                sparse=False,
+                                                ms_before=2, ms_after=5,
+                                                )
             current_sorter_param[0]['sorting'] = 'Done'
             
             with open(f"{current_sorter_param[0]['output_folder_path']}/{current_sorter_param[0]['name']}/base sorting/pipeline_param.json", "w") as outfile: 
@@ -292,7 +293,6 @@ def launch_sorting(current_sorter_param, main_window, state, analyzer, recording
             main_window[0].write_event_value('popup_error', "Docker Desktop need to be open for sorting")
         
         unlock_analysis(main_window, current_sorter_param, trigger_by_error=True)
-        main_window[0]['progress_text'].update(f'Error: {e}')
         
         return analyzer
             

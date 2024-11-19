@@ -28,8 +28,21 @@ from tqdm import tqdm
 from curation.clean_unit import get_highest_amplitude_channel
 from additional.toolbox import load_or_compute_extension
 
-
-def plot_summary_for_unit(unit_id, analyzer, sorter_name, ylim=None, unit_for_plot_name=None, save_path=None, trial_len=9):
+def add_event(ax, event_dict):
+    if event_dict is not None:
+        for event_name in event_dict.keys():
+            if 'alpha' in event_dict[event_name].keys():
+                alpha = event_dict[event_name]['alpha']
+            else:
+                alpha = None
+                
+            if isinstance(event_dict[event_name]['event_time'], (list, tuple)):
+                assert len(event_dict[event_name]['event_time']) == 2
+                ax.axvspan(event_dict[event_name]['event_time'][0], event_dict[event_name]['event_time'][1], color=event_dict[event_name]['color'], alpha=alpha)
+            else:
+                ax.axvline(event_dict[event_name]['event_time'], color=event_dict[event_name]['color'], alpha=alpha)
+                
+def plot_summary_for_unit(unit_id, analyzer, sorter_name, ylim=None, unit_for_plot_name=None, save_path=None, trial_len=9, event_dict=None):
         
     unit_for_plot_name = unit_id if unit_for_plot_name is None else unit_for_plot_name
     
@@ -39,8 +52,10 @@ def plot_summary_for_unit(unit_id, analyzer, sorter_name, ylim=None, unit_for_pl
     ax0 = fig.add_subplot(gs[0, 0:2])
     ax1 = fig.add_subplot(gs[0, 2:4])
     ax1.set_title('Mean firing rate during a trial')
+    add_event(ax1, event_dict)
     ax8 = fig.add_subplot(gs[0, 4:6])
     ax8.set_title('zscore firing rate during a trial')
+    add_event(ax8, event_dict)
     ax7 = fig.add_subplot(gs[1:3, 0:3])
     ax2 = fig.add_subplot(gs[1, 3:6])
     ax2.set_title('Waveform of the unit')
@@ -48,6 +63,7 @@ def plot_summary_for_unit(unit_id, analyzer, sorter_name, ylim=None, unit_for_pl
     ax4 = fig.add_subplot(gs[1, 6], sharey = ax3)
     ax5 = fig.add_subplot(gs[2, 6])
     ax6 = fig.add_subplot(gs[2, 3:6])
+    add_event(ax6, event_dict)
     
     window_ms_autocorr = 200
     sw.plot_autocorrelograms(analyzer.sorting, unit_ids=[unit_id], axes=ax0, bin_ms=1, window_ms=window_ms_autocorr, )
@@ -133,7 +149,7 @@ def plot_summary_for_unit(unit_id, analyzer, sorter_name, ylim=None, unit_for_pl
 def parallel_plot_summary(args):
     return plot_summary_for_unit(*args)
 
-def plot_sorting_summary(analyzer, sorter_name, save_extention=False, save_path=None, trial_len=9, acelerate=False):
+def plot_sorting_summary(analyzer, sorter_name, save_extention=False, save_path=None, trial_len=9, acelerate=False, event_dict=None):
     load_or_compute_extension(analyzer, ['random_spikes', 'waveforms', 'templates', 'spike_locations'], save_extention)
     
     max_unit_amplitude = 0
@@ -158,5 +174,5 @@ def plot_sorting_summary(analyzer, sorter_name, save_extention=False, save_path=
              pool.map(parallel_plot_summary, args)
     else:
         for unit_id in tqdm(analyzer.unit_ids, desc='Plot sorting summary', bar_format='{l_bar}{bar}\n'):
-            plot_summary_for_unit(unit_id, analyzer, sorter_name, ylim, None, save_path, trial_len)
+            plot_summary_for_unit(unit_id, analyzer, sorter_name, ylim, None, save_path, trial_len, event_dict=event_dict)
             

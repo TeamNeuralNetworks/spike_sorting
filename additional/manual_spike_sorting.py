@@ -64,6 +64,7 @@ for sorter_name, sorter_params in sorter.items():
     we = clean_unit(sorter, recording, df_real_time=None,
                     save_folder=fr'{sorter_result_folder}\{sorter_name}', delay=None, mouse='0032', 
                     sorter_name=sorter_name, plot=True, save_plot=fr'{sorter_result_folder}')   
+    
     plot_sorting_summary(we, sorter_name, None, '0032', save_path=f'{sorter_result_folder}/we', trial_len=30, acelerate=False)
     
     we, sorter, we_path = manual_curation_module(we, 

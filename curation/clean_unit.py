@@ -65,7 +65,7 @@ def perform_split(cs, unit_id, mask, remove_first_index_unit=True):
         after_split_id = new_sorting.get_unit_ids()
         new_unit_id_list = [new_unit_id for new_unit_id in after_split_id if new_unit_id not in before_split_id]
         
-        new_cs = CurationSorting(parent_sorting=new_sorting)
+        new_cs = CurationSorting(sorting=new_sorting)
         if remove_first_index_unit:
             bad_unit = min(new_unit_id_list)
             new_cs.remove_units([bad_unit])
@@ -305,7 +305,7 @@ def rename_unit(recording, cs, window, df_cleaning_summary, save_folder=None):
     for removed_unit_id in removed_unit_id_list:
         print(f'Unit {removed_unit_id} removed for empty: spikes number {len(cs.sorting.get_unit_spike_train(unit_id=removed_unit_id))}')
         window['progress_text'].update(f'Unit {removed_unit_id} removed for empty: spikes number {len(cs.sorting.get_unit_spike_train(unit_id=removed_unit_id))}')
-    cs = CurationSorting(parent_sorting=remove_empty_unit_sorting)
+    cs = CurationSorting(sorting=remove_empty_unit_sorting)
     print(f'{len(before_empty_unti_remouval)-len(after_empty_unti_remouval)} units have been remouve for being empty')
     window['progress_text'].update(f'{len(before_empty_unti_remouval)-len(after_empty_unti_remouval)} units have been remouve for being empty')
     
@@ -342,7 +342,7 @@ def rename_unit(recording, cs, window, df_cleaning_summary, save_folder=None):
                                                )
     return clean_analyzer, df_cleaning_summary
     
-def align_spike(analyzer, df_cleaning_summary, save_folder=None):
+def align_spike(analyzer, df_cleaning_summary, ms_before=1, ms_after=2.5, save_folder=None):
     
     load_or_compute_extension(analyzer,  ['random_spikes', 'waveforms', 'templates'], extension_params={"random_spikes":{"method": "all"}})
     unit_peak_shifts = get_template_extremum_channel_peak_shift(analyzer, peak_sign='neg')
@@ -375,7 +375,12 @@ def align_spike(analyzer, df_cleaning_summary, save_folder=None):
 
     return clean_analyzer, df_cleaning_summary
 
-def remove_by_metric(analyzer, cs, window, df_cleaning_summary, isi_violation_activate=True, isi_threshold_ms=1, isi_violatio_thr=0.2, save_folder=None, **kwargs):
+def remove_by_metric(analyzer, cs, window, df_cleaning_summary, 
+                     isi_violation_activate=True, isi_threshold_ms=1, isi_violatio_thr=0.2, 
+                     min_freq_activate=True, min_freq_threshold_hz_low=0.1, min_freq_threshold_hz_high=50, 
+                     presence_ratio_activate=True, presence_ratio_threshold_low=0.9, presence_ratio_threshold_high=1,
+                     L_ratio_activate=True, L_ratio_threshold=10, 
+                     save_folder=None, **kwargs):
     
     bad_units = []
     if isi_violation_activate:
@@ -387,10 +392,51 @@ def remove_by_metric(analyzer, cs, window, df_cleaning_summary, isi_violation_ac
         print(f'Units {isi_bad_units} removed for isi violation')
         window['progress_text'].update(f'Units {isi_bad_units} removed for isi violation')
         bad_units = list(set(bad_units + isi_bad_units))
+    
+    if min_freq_activate:
+        units_firing_rate = sqm.compute_firing_rates(sorting_analyzer=analyzer)
+        min_freq_bad_units = []
+        for unit, unit_firing_rate in units_firing_rate.items():
+            if unit_firing_rate <= min_freq_threshold_hz_low or unit_firing_rate >= min_freq_threshold_hz_high:
+                min_freq_bad_units.append(unit)
+
+                
+        print(f'Units {min_freq_bad_units} removed because of low rate frequency')
+        window['progress_text'].update(f'Units {min_freq_bad_units} removed because of low rate frequency')
+        bad_units = list(set(bad_units + min_freq_bad_units))
+    
+    if presence_ratio_activate:
+        units_presence_ratio = sqm.compute_presence_ratios(sorting_analyzer=analyzer)
+        presence_ratio_bad_units = []
+        for unit, unit_presence_ratio in units_presence_ratio.items():
+            if unit_presence_ratio <= presence_ratio_threshold_low or unit_presence_ratio >= presence_ratio_threshold_high:
+                presence_ratio_bad_units.append(unit)
+        print(f'Units {presence_ratio_bad_units} removed because of low presence ratio')
+        window['progress_text'].update(f'Units {presence_ratio_bad_units} removed because of low presence ratio')
+        bad_units = list(set(bad_units + presence_ratio_bad_units))
+    
+    if L_ratio_activate:
+        load_or_compute_extension(analyzer, ['random_spikes', 'waveforms', 'principal_components'], extension_params={"random_spikes":{"method": "all"},
+                                                                                                                      "principal_components":{"n_components":3, "mode":"by_channel_local"}
+                                                                                                                      })
+        all_pcs, all_labels = analyzer.get_extension("principal_components").get_some_projections()
+        all_pcs = analyzer.compute("principal_components", n_components=3, mode="concatenated").get_data()
+        
+        l_ratio_bad_units = []
+        for unit in analyzer.unit_ids:
+            _, unit_l_ratio = sqm.pca_metrics.mahalanobis_metrics(all_pcs=all_pcs, all_labels=all_labels, this_unit_id=unit)
+            if unit_l_ratio >= L_ratio_threshold:
+                l_ratio_bad_units.append(unit)
+        print(f'Units {l_ratio_bad_units} removed because of high L-ratio')
+        window['progress_text'].update(f'Units {l_ratio_bad_units} removed because of high L-ratio')
+        bad_units = list(set(bad_units + l_ratio_bad_units))
         
     cs.remove_units(bad_units)
     clean_sorting = cs.sorting
-
+    
+    if len(clean_sorting.get_unit_ids()) == 0:
+        raise ValueError('No units ramaining after custom cleaning')
+    
     new_df_row_list = []
     for unit_id in clean_sorting.get_unit_ids():
         current_unit_df_cleaning_summary = df_cleaning_summary[df_cleaning_summary[df_cleaning_summary.columns[-1]] == unit_id]
@@ -485,7 +531,7 @@ def load_temp_file(temp_file_path, load_we=False, load_df_cleaning_summary=False
         if os.path.exists(f'{temp_file_path}/temp_we.pkl'): 
            with open(f'{temp_file_path}/temp_we.pkl', 'rb') as file:
                we = pickle.load(file)
-           cs = CurationSorting(parent_sorting=we.sorting)
+           cs = CurationSorting(sorting=we.sorting)
 
     if load_df_cleaning_summary is not None:
         if os.path.exists(f'{temp_file_path}/temp_df_cleaning_summary.pkl'): 
@@ -522,7 +568,7 @@ def clean_unit(analyzer, cleaning_param, window, save_folder=None, sorter_name=N
         
     save_temp_file(temp_file_path, plot_data_dict={'figure_data': []})
 
-    cs = CurationSorting(parent_sorting=analyzer.sorting)
+    cs = CurationSorting(sorting=analyzer.sorting)
     df_cleaning_summary = pd.DataFrame({'unfilter': analyzer.unit_ids})
     if cleaning_param['plot_cleaning_summary']['activate']:
         #plot_data_dict is used to store the waveform of each step of cleaning for the different units
@@ -536,7 +582,7 @@ def clean_unit(analyzer, cleaning_param, window, save_folder=None, sorter_name=N
         if df_cleaning_summary is None or 'Remove edge artefact' not in df_cleaning_summary.columns:
             window['progress_text'].update('Removing edge artefact')
             analyzer, df_cleaning_summary = remove_edge_artefact(analyzer, cs, df_cleaning_summary, **cleaning_param['remove_edge_artefact'])
-            cs = CurationSorting(parent_sorting=analyzer.sorting)
+            cs = CurationSorting(sorting=analyzer.sorting)
             save_temp_file(temp_file_path, df_cleaning_summary=df_cleaning_summary)
         else:
             print('Loading from files')
@@ -548,7 +594,7 @@ def clean_unit(analyzer, cleaning_param, window, save_folder=None, sorter_name=N
         if df_cleaning_summary is None or 'Remove big artefact' not in df_cleaning_summary.columns:
             window['progress_text'].update('Removing big artefact')
             analyzer, df_cleaning_summary = remove_big_artefact(analyzer, cs, df_cleaning_summary, **cleaning_param['remove_big_artefact'])
-            cs = CurationSorting(parent_sorting=analyzer.sorting)
+            cs = CurationSorting(sorting=analyzer.sorting)
             if save_plot is not None:
                 plot_data_dict_maker('After cleaning', 'Remove big artefact', analyzer, 'g', temp_file_path)
             save_temp_file(temp_file_path, df_cleaning_summary=df_cleaning_summary)
@@ -561,7 +607,7 @@ def clean_unit(analyzer, cleaning_param, window, save_folder=None, sorter_name=N
     if df_cleaning_summary is None or 'Align spikes' not in df_cleaning_summary.columns:
         window['progress_text'].update('Aligning spikes')
         analyzer, df_cleaning_summary = align_spike(analyzer, df_cleaning_summary, save_folder=None)
-        cs = CurationSorting(parent_sorting=analyzer.sorting)
+        cs = CurationSorting(sorting=analyzer.sorting)
         save_temp_file(temp_file_path, df_cleaning_summary=df_cleaning_summary)
     else:
         print('Loading from files')
@@ -572,7 +618,7 @@ def clean_unit(analyzer, cleaning_param, window, save_folder=None, sorter_name=N
         if df_cleaning_summary is None or 'Remove noise by splitting' not in df_cleaning_summary.columns:
             window['progress_text'].update('Splitting multi unit')
             analyzer, df_cleaning_summary = split_noise_from_unit(analyzer, cs, window, df_cleaning_summary, save_plot=save_plot, **cleaning_param['split_multi_unit'])
-            cs = CurationSorting(parent_sorting=analyzer.sorting)
+            cs = CurationSorting(sorting=analyzer.sorting)
             save_temp_file(temp_file_path, df_cleaning_summary=df_cleaning_summary)
         else:
             print('Loading from files')
@@ -592,7 +638,7 @@ def clean_unit(analyzer, cleaning_param, window, save_folder=None, sorter_name=N
         print('\n######### Rename units ##########')
         if df_cleaning_summary is None or 'Rename units' not in df_cleaning_summary.columns:
             window['progress_text'].update('Renaming units')
-            cs = CurationSorting(parent_sorting=analyzer.sorting) 
+            cs = CurationSorting(sorting=analyzer.sorting) 
             analyzer, df_cleaning_summary = rename_unit(analyzer.recording, cs, window, df_cleaning_summary, save_folder=save_folder)
             save_temp_file(temp_file_path, df_cleaning_summary=df_cleaning_summary)
             if save_plot is not None:

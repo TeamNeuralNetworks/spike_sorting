@@ -130,7 +130,7 @@ def make_window(current_sorter_param):
     
     main_menu_layout = [['File', ['Load ephy folder', 'Load multiple recording', 'Load analysis', 'Export spike time', 'Export Template']], 
                         # ['Edit',['Import metadata', 'Ephy file tool', 'Probe tool']],
-                        ['Parameters',['Preprocessing parameter', 'Sorter parameter', 'Custom cleaning parameter']],
+                        ['Parameters',['Preprocessing parameter', 'Sorter parameter', 'Custom cleaning parameter', 'Plotting parameter']],
                         ]
     
     if current_sorter_param[0]['load_ephy']['ephy_file_path'] is None:
@@ -188,28 +188,9 @@ def main_gui_maker(main_window, state, current_sorter_param, ephy_extension_dict
    config_custom_cleaning_param_window = None
    additional_recording_info_window = None
    
-   
    while True:
         window, event, values = sg.read_all_windows()
-        
-        if state[0] == 'stop':
-            main_window[0].close()
-            try:
-                config_sorter_param_window.close()
-            except AttributeError:
-                pass
-            try:
-                config_custom_cleaning_param_window.close()
-            except AttributeError:
-                pass
-            break
-            
-            try:
-                additional_recording_info_window.close()
-            except AttributeError:
-                pass
-            break
-        
+                
         if window == config_preprocessing_param_window:
             preprocessing_event_handler(window, values, event, current_sorter_param, state)
         
