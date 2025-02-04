@@ -64,7 +64,7 @@ sorter = {
 
 if not os.path.isdir(fr'{sorter_result_folder}\{sorter_name}'):
     sorter = ss.run_sorter(sorter_name=sorter_name, recording=recording, docker_image=True, 
-                                  output_folder=f'{sorter_result_folder}/{sorter_name}', verbose=True, **sorter[sorter_name])
+                                  folder=f'{sorter_result_folder}/{sorter_name}', verbose=True, **sorter[sorter_name])
 else:
     print('Unfilter_sorter folder not found, load from folder')
     sorter = ss.NpzSortingExtractor.load_from_folder(fr'{sorter_result_folder}\{sorter_name}\in_container_sorting')

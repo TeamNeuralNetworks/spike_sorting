@@ -18,16 +18,16 @@ import time
 import kachery_cloud as kcl
 import json
 
-def manual_curation_event_handler(window, values, event, current_sorter_param, state): 
+def manual_curation_event_handler(window, values, event, pipeline_parameters, state): 
     if event == 'open_manual_curation_outputlink_button':
-        webbrowser.open(current_sorter_param[0]['manual_curation_param']['outputlink'])
+        webbrowser.open(pipeline_parameters[0]['manual_curation_param']['outputlink'])
         
     if event in ['continue_manual_curation_inputlink_button', 'accept_manual_curation_inputlink_button']:
-        current_sorter_param[0]['manual_curation_param']['mode'] = event.split('_')[0]
-        current_sorter_param[0]['manual_curation_param']['inputlink'] = values['manual_curation_inputlink_input']
+        pipeline_parameters[0]['manual_curation_param']['mode'] = event.split('_')[0]
+        pipeline_parameters[0]['manual_curation_param']['inputlink'] = values['manual_curation_inputlink_input']
 
         
-def manual_curation_module(analyzer, save_path, current_sorter_param, window, trial_len=9, save_plot=True):
+def manual_curation_module(analyzer, save_path, pipeline_parameters, window, trial_len=9, save_plot=True):
     
     window['manual_cleaning_input_column'].update(visible=True)
         
@@ -47,8 +47,8 @@ def manual_curation_module(analyzer, save_path, current_sorter_param, window, tr
         
         window['progress_text'].update('Generating link')
         sorting_view = ww.plot_sorting_summary(analyzer, curation=True, backend='sortingview')
-        current_sorter_param[0]['manual_curation_param']['outputlink'] = sorting_view.url
-        current_sorter_param[0]['manual_curation_param']['inputlink'] = None
+        pipeline_parameters[0]['manual_curation_param']['outputlink'] = sorting_view.url
+        pipeline_parameters[0]['manual_curation_param']['inputlink'] = None
         window['progress_text'].update(f'Recomanded merge: {merges}')
         
         window['manual_curation_outputlink_input'].update(sorting_view.url)
@@ -60,10 +60,10 @@ def manual_curation_module(analyzer, save_path, current_sorter_param, window, tr
         
         while True:
             time.sleep(0.1)
-            if current_sorter_param[0]['manual_curation_param']['inputlink'] is not None:
+            if pipeline_parameters[0]['manual_curation_param']['inputlink'] is not None:
                 try:
                     window['progress_text'].update('Converting link into SortingAnalyzer')
-                    sortingview_curation_dict = kcl.load_json(uri=current_sorter_param[0]['manual_curation_param']['inputlink'])
+                    sortingview_curation_dict = kcl.load_json(uri=pipeline_parameters[0]['manual_curation_param']['inputlink'])
                     if 'labelsByUnit' not in sortingview_curation_dict.keys():
                         sortingview_curation_dict['labelsByUnit'] = {}
                         for unit in analyzer.unit_ids:
@@ -87,13 +87,13 @@ def manual_curation_module(analyzer, save_path, current_sorter_param, window, tr
                             
                     else:
                         sorter_manualy_curated = apply_sortingview_curation(sorting=analyzer.sorting, 
-                                                                            uri_or_json=current_sorter_param[0]['manual_curation_param']['inputlink'],
+                                                                            uri_or_json=pipeline_parameters[0]['manual_curation_param']['inputlink'],
                                                                             exclude_labels=["reject", "noise", "artifact"])                
                 except:
                     window['progress_text'].update('')
                     window.write_event_value('popup_error', "Unable to convert link into SortingAnalyzer")
                     window['manual_curation_inputlink_input'].update('')
-                    current_sorter_param[0]['manual_curation_param']['inputlink'] = None
+                    pipeline_parameters[0]['manual_curation_param']['inputlink'] = None
                     continue
                 else:
                     break
@@ -104,16 +104,16 @@ def manual_curation_module(analyzer, save_path, current_sorter_param, window, tr
         window['open_manual_curation_outputlink_button'].update(disabled=True)
         window['continue_manual_curation_inputlink_button'].update(disabled=True)
         window['accept_manual_curation_inputlink_button'].update(disabled=True)
-        current_sorter_param[0]['manual_curation_param']['outputlink'] = None
-        current_sorter_param[0]['manual_curation_param']['inputlink'] = None
+        pipeline_parameters[0]['manual_curation_param']['outputlink'] = None
+        pipeline_parameters[0]['manual_curation_param']['inputlink'] = None
         
         os.makedirs(save_path, exist_ok=True)
-        if current_sorter_param[0]['manual_curation_param']['mode'] == 'continue':
+        if pipeline_parameters[0]['manual_curation_param']['mode'] == 'continue':
             analyzer = create_sorting_analyzer(sorting=sorter_manualy_curated,
                                                 recording=analyzer.recording, 
                                                 format="memory"
                                                 )
-        elif current_sorter_param[0]['manual_curation_param']['mode'] == 'accept':
+        elif pipeline_parameters[0]['manual_curation_param']['mode'] == 'accept':
             window['manual_cleaning_input_column'].update(visible=False)
             create_sorting_analyzer(sorting=sorter_manualy_curated,
                                                 recording=analyzer.recording,
@@ -135,15 +135,15 @@ def manual_curation_module(analyzer, save_path, current_sorter_param, window, tr
         
         window['progress_text'].update('Sorting Summary plot in progress')
         plot_sorting_summary(analyzer, 
-                              current_sorter_param[0]['name'], 
+                              pipeline_parameters[0]['name'], 
                               save_path=save_path, 
                               trial_len=analyzer.get_total_duration())
         window['progress_text'].update('')
         
-        if current_sorter_param[0]['manual_curation_param']['mode'] == 'continue':
+        if pipeline_parameters[0]['manual_curation_param']['mode'] == 'continue':
             version += 1
             continue
-        elif current_sorter_param[0]['manual_curation_param']['mode'] == 'accept':
+        elif pipeline_parameters[0]['manual_curation_param']['mode'] == 'accept':
             break
         else:
             raise ValueError('Not implemented')
