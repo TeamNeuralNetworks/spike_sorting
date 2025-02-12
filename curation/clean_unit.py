@@ -21,7 +21,6 @@ from sklearn.decomposition import PCA
 from scipy.cluster.hierarchy import linkage, fcluster
 import pickle
 import shutil
-import multiprocessing as mp
 from skimage.filters import threshold_otsu
 
 from additional.toolbox import load_or_compute_extension
@@ -334,10 +333,8 @@ def rename_unit(recording, cs, window, df_cleaning_summary, save_folder=None):
     removed_unit_id_list = [removed_unit_id for removed_unit_id in before_empty_unti_remouval if removed_unit_id not in after_empty_unti_remouval]
     for removed_unit_id in removed_unit_id_list:
         print(f'Unit {removed_unit_id} removed for empty: spikes number {len(cs.sorting.get_unit_spike_train(unit_id=removed_unit_id))}')
-        window['progress_text'].update(f'Unit {removed_unit_id} removed for empty: spikes number {len(cs.sorting.get_unit_spike_train(unit_id=removed_unit_id))}')
     cs = CurationSorting(sorting=remove_empty_unit_sorting)
     print(f'{len(before_empty_unti_remouval)-len(after_empty_unti_remouval)} units have been remouve for being empty')
-    window['progress_text'].update(f'{len(before_empty_unti_remouval)-len(after_empty_unti_remouval)} units have been remouve for being empty')
     
     number_of_unit = len(cs.sorting.get_unit_ids())
     new_unit_id_list = [unit_id for unit_id in range(number_of_unit)]
@@ -420,7 +417,6 @@ def remove_by_metric(analyzer, cs, window, df_cleaning_summary,
             if unit_violatio_ratio >= isi_violatio_thr:
                 isi_bad_units.append(unit)
         print(f'Units {isi_bad_units} removed for isi violation')
-        window['progress_text'].update(f'Units {isi_bad_units} removed for isi violation')
         bad_units = list(set(bad_units + isi_bad_units))
     
     if min_freq_activate:
@@ -432,7 +428,6 @@ def remove_by_metric(analyzer, cs, window, df_cleaning_summary,
 
                 
         print(f'Units {min_freq_bad_units} removed because of low rate frequency')
-        window['progress_text'].update(f'Units {min_freq_bad_units} removed because of low rate frequency')
         bad_units = list(set(bad_units + min_freq_bad_units))
     
     if presence_ratio_activate:
@@ -442,7 +437,6 @@ def remove_by_metric(analyzer, cs, window, df_cleaning_summary,
             if unit_presence_ratio <= presence_ratio_threshold_low or unit_presence_ratio >= presence_ratio_threshold_high:
                 presence_ratio_bad_units.append(unit)
         print(f'Units {presence_ratio_bad_units} removed because of low presence ratio')
-        window['progress_text'].update(f'Units {presence_ratio_bad_units} removed because of low presence ratio')
         bad_units = list(set(bad_units + presence_ratio_bad_units))
     
     if L_ratio_activate:
@@ -458,14 +452,13 @@ def remove_by_metric(analyzer, cs, window, df_cleaning_summary,
             if unit_l_ratio >= L_ratio_threshold:
                 l_ratio_bad_units.append(unit)
         print(f'Units {l_ratio_bad_units} removed because of high L-ratio')
-        window['progress_text'].update(f'Units {l_ratio_bad_units} removed because of high L-ratio')
         bad_units = list(set(bad_units + l_ratio_bad_units))
         
     cs.remove_units(bad_units)
     clean_sorting = cs.sorting
     
     if len(clean_sorting.get_unit_ids()) == 0:
-        raise ValueError('No units ramaining after custom cleaning')
+        raise ValueError('No units ramaining after unit auto cleaning')
     
     new_df_row_list = []
     for unit_id in clean_sorting.get_unit_ids():
@@ -587,10 +580,13 @@ def save_temp_file(temp_file_path, df_cleaning_summary=None, plot_data_dict=None
         with open(f'{temp_file_path}\{file_name_to_save}.pkl', 'wb') as file:
             pickle.dump(file_to_save, file)
             
-def clean_unit(analyzer, cleaning_param, window, save_folder=None, sorter_name=None, save_plot=None, *args): 
+def clean_unit(base_instance, save_folder=None, save_plot_path=None, *args): 
     
-    if not cleaning_param['plot_cleaning_summary']['activate']:
+    if not base_instance.pipeline_parameters['unit_auto_cleaning_param']['plot_cleaning_summary']['activate']:
         save_plot=None
+    else:
+        base_instance.pipeline_parameters['unit_auto_cleaning_param']['plot_cleaning_summary']['cleaning_summary_plot_path'] = save_plot_path
+        save_plot = save_plot_path
     
     temp_file_path = f'{save_folder}/splitting_temp_file'
     if not os.path.isdir(temp_file_path):
@@ -598,35 +594,33 @@ def clean_unit(analyzer, cleaning_param, window, save_folder=None, sorter_name=N
         
     save_temp_file(temp_file_path, plot_data_dict={'figure_data': []})
 
-    cs = CurationSorting(sorting=analyzer.sorting)
-    df_cleaning_summary = pd.DataFrame({'unfilter': analyzer.unit_ids})
-    if cleaning_param['plot_cleaning_summary']['activate']:
+    cs = CurationSorting(sorting=base_instance.analyzer.sorting)
+    df_cleaning_summary = pd.DataFrame({'unfilter': base_instance.analyzer.unit_ids})
+    if base_instance.pipeline_parameters['unit_auto_cleaning_param']['plot_cleaning_summary']['activate']:
         #plot_data_dict is used to store the waveform of each step of cleaning for the different units
         #df_cleaning_summary will be used to keep track of the change of id each unit had at every step of the cleaning
         if save_plot is not None:
-            plot_data_dict_maker('Before cleaning', 'unfilter', analyzer, 'r', temp_file_path)
+            plot_data_dict_maker('Before cleaning', 'unfilter', base_instance.analyzer, 'r', temp_file_path)
     save_temp_file(temp_file_path, df_cleaning_summary=df_cleaning_summary)
     
-    if cleaning_param['remove_edge_artefact']['activate']:
+    if base_instance.pipeline_parameters['unit_auto_cleaning_param']['remove_edge_artefact']['activate']:
         print('\n##### Remove edge artefact #######')
         if df_cleaning_summary is None or 'Remove edge artefact' not in df_cleaning_summary.columns:
-            window['progress_text'].update('Removing edge artefact')
-            analyzer, df_cleaning_summary = remove_edge_artefact(analyzer, cs, df_cleaning_summary, **cleaning_param['remove_edge_artefact'])
-            cs = CurationSorting(sorting=analyzer.sorting)
+            base_instance.analyzer, df_cleaning_summary = remove_edge_artefact(base_instance.analyzer, cs, df_cleaning_summary, **base_instance.pipeline_parameters['unit_auto_cleaning_param']['remove_edge_artefact'])
+            cs = CurationSorting(sorting=base_instance.analyzer.sorting)
             save_temp_file(temp_file_path, df_cleaning_summary=df_cleaning_summary)
         else:
             print('Loading from files')
         print('##################################')
     
     
-    if cleaning_param['remove_big_artefact']['activate']:
+    if base_instance.pipeline_parameters['unit_auto_cleaning_param']['remove_big_artefact']['activate']:
         print('\n###### Remove big artefact #######')
         if df_cleaning_summary is None or 'Remove big artefact' not in df_cleaning_summary.columns:
-            window['progress_text'].update('Removing big artefact')
-            analyzer, df_cleaning_summary = remove_big_artefact(analyzer, cs, df_cleaning_summary, **cleaning_param['remove_big_artefact'])
-            cs = CurationSorting(sorting=analyzer.sorting)
+            base_instance.analyzer, df_cleaning_summary = remove_big_artefact(base_instance.analyzer, cs, df_cleaning_summary, **base_instance.pipeline_parameters['unit_auto_cleaning_param']['remove_big_artefact'])
+            cs = CurationSorting(sorting=base_instance.analyzer.sorting)
             if save_plot is not None:
-                plot_data_dict_maker('After cleaning', 'Remove big artefact', analyzer, 'g', temp_file_path)
+                plot_data_dict_maker('After cleaning', 'Remove big artefact', base_instance.analyzer, 'g', temp_file_path)
             save_temp_file(temp_file_path, df_cleaning_summary=df_cleaning_summary)
         else:
             print('Loading from files')
@@ -635,44 +629,40 @@ def clean_unit(analyzer, cleaning_param, window, save_folder=None, sorter_name=N
     
     print('\n########## Align spikes ###########')
     if df_cleaning_summary is None or 'Align spikes' not in df_cleaning_summary.columns:
-        window['progress_text'].update('Aligning spikes')
-        analyzer, df_cleaning_summary = align_spike(analyzer, df_cleaning_summary, save_folder=None)
-        cs = CurationSorting(sorting=analyzer.sorting)
+        base_instance.analyzer, df_cleaning_summary = align_spike(base_instance.analyzer, df_cleaning_summary, save_folder=None)
+        cs = CurationSorting(sorting=base_instance.analyzer.sorting)
         save_temp_file(temp_file_path, df_cleaning_summary=df_cleaning_summary)
     else:
         print('Loading from files')
     print('##################################')
     
-    if cleaning_param['split_multi_unit']['activate']:
+    if base_instance.pipeline_parameters['unit_auto_cleaning_param']['split_multi_unit']['activate']:
         print('\n#### Remove noise by splitting ###')
         if df_cleaning_summary is None or 'Remove noise by splitting' not in df_cleaning_summary.columns:
-            window['progress_text'].update('Splitting multi unit')
-            analyzer, df_cleaning_summary = split_noise_from_unit(analyzer, cs, window, df_cleaning_summary, save_plot=save_plot, **cleaning_param['split_multi_unit'])
-            cs = CurationSorting(sorting=analyzer.sorting)
+            base_instance.analyzer, df_cleaning_summary = split_noise_from_unit(base_instance.analyzer, cs, base_instance.Main_GUI_instance.window, df_cleaning_summary, save_plot=save_plot, **base_instance.pipeline_parameters['unit_auto_cleaning_param']['split_multi_unit'])
+            cs = CurationSorting(sorting=base_instance.analyzer.sorting)
             save_temp_file(temp_file_path, df_cleaning_summary=df_cleaning_summary)
         else:
             print('Loading from files')
         print('##################################')
     
-    if cleaning_param['remove_by_metric']['activate']:
+    if base_instance.pipeline_parameters['unit_auto_cleaning_param']['remove_by_metric']['activate']:
         print('\n## Remove bad units with metric ##')
         if df_cleaning_summary is None or 'Remove bad units with metric' not in df_cleaning_summary.columns:
-            window['progress_text'].update('Remove bad units with metric')
-            analyzer, df_cleaning_summary = remove_by_metric(analyzer, cs, window, df_cleaning_summary, **cleaning_param['remove_by_metric'])
+            base_instance.analyzer, df_cleaning_summary = remove_by_metric(base_instance.analyzer, cs, base_instance.Main_GUI_instance.window, df_cleaning_summary, **base_instance.pipeline_parameters['unit_auto_cleaning_param']['remove_by_metric'])
             save_temp_file(temp_file_path, df_cleaning_summary=df_cleaning_summary)
         else:
             print('Loading from files')
         print('##################################')
 
-    if cleaning_param['rename_unit']['activate']:
+    if base_instance.pipeline_parameters['unit_auto_cleaning_param']['rename_unit']['activate']:
         print('\n######### Rename units ##########')
         if df_cleaning_summary is None or 'Rename units' not in df_cleaning_summary.columns:
-            window['progress_text'].update('Renaming units')
-            cs = CurationSorting(sorting=analyzer.sorting) 
-            analyzer, df_cleaning_summary = rename_unit(analyzer.recording, cs, window, df_cleaning_summary, save_folder=save_folder)
+            cs = CurationSorting(sorting=base_instance.analyzer.sorting) 
+            base_instance.analyzer, df_cleaning_summary = rename_unit(base_instance.analyzer.recording, cs, base_instance.Main_GUI_instance.window, df_cleaning_summary, save_folder=save_folder)
             save_temp_file(temp_file_path, df_cleaning_summary=df_cleaning_summary)
             if save_plot is not None:
-                plot_data_dict_maker('After splitting', 'Rename units', analyzer, 'k', temp_file_path)
+                plot_data_dict_maker('After splitting', 'Rename units', base_instance.analyzer, 'k', temp_file_path)
         else:
             print('Loading from files')
         print('##################################')
@@ -680,10 +670,9 @@ def clean_unit(analyzer, cleaning_param, window, save_folder=None, sorter_name=N
     #TODO buged, it seem that units are not properly tracked at each step and il will also be nice to also plot unit that has been remeved to allow manual confirmation that the removing was proper
     # if save_plot is not None:
     #     print('\n###### Plot cleaning summary #####')
-    #     window['progress_text'].update('Sorting Summary plot in progress')
     #     plot_cleaning_summary(temp_file_path, sorter_name, save_plot=save_plot)
     #     print('##################################')
     
     erase_temp_file(temp_file_path)
-    return analyzer   
+    return base_instance.analyzer   
     

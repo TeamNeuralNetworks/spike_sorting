@@ -28,6 +28,8 @@ from tqdm import tqdm
 from curation.clean_unit import get_highest_amplitude_channel
 from additional.toolbox import load_or_compute_extension
 
+#TODO update to new class structure
+
 def add_event(ax, event_dict):
     if event_dict is not None:
         for event_name in event_dict.keys():
@@ -42,11 +44,23 @@ def add_event(ax, event_dict):
             else:
                 ax.axvline(event_dict[event_name]['event_time'], color=event_dict[event_name]['color'], alpha=alpha)
                 
-def plot_summary_for_unit(unit_id, analyzer, sorter_name, ylim=None, unit_for_plot_name=None, save_path=None, trial_len=9, event_dict=None):
+def plot_summary_for_unit(unit_id, 
+                          analyzer, 
+                          sorter_name,
+                          summary_plot_param,
+                          fig=None,
+                          ylim=None, 
+                          save_path=None,
+                          unit_for_plot_name=None, 
+                          event_dict=None):
+        
+    if summary_plot_param['trial_info']['lenght'] is None:
+        summary_plot_param['trial_info']['lenght'] = analyzer.recording.get_duration()
         
     unit_for_plot_name = unit_id if unit_for_plot_name is None else unit_for_plot_name
     
-    fig = plt.figure(figsize=(30, 13))
+    if fig is None:
+        fig = plt.figure(figsize=(30, 13))
     gs = GridSpec(nrows=3, ncols=7)
     fig.suptitle(f'{sorter_name}\nunits {unit_for_plot_name} (Total spike {analyzer.sorting.get_total_num_spikes()[unit_id]})',)
     ax0 = fig.add_subplot(gs[0, 0:2])
@@ -74,14 +88,14 @@ def plot_summary_for_unit(unit_id, analyzer, sorter_name, ylim=None, unit_for_pl
     current_spike_train_list = []
     while len(current_spike_train) > 0: #this loop is to split the spike train into trials with correct duration in seconds
         # Find indices of elements under 9 (9 sec being the duration of the trial)
-        indices = np.where(current_spike_train < trial_len)[0]
+        indices = np.where(current_spike_train < summary_plot_param['trial_info']['lenght'])[0]
         if len(indices)>0:
             # Append elements to the result list
-            current_spike_train_list.append(SpikeTrain(current_spike_train[indices]*s, t_stop=trial_len))
+            current_spike_train_list.append(SpikeTrain(current_spike_train[indices]*s, t_stop=summary_plot_param['trial_info']['lenght']))
             # Remove the appended elements from the array
             current_spike_train = np.delete(current_spike_train, indices)
             # Subtract 9 from all remaining elements
-        current_spike_train -= trial_len
+        current_spike_train -= summary_plot_param['trial_info']['lenght']
     
     kernel = kernels.GaussianKernel(sigma=100 * pq.ms)
     rates = statistics.instantaneous_rate(current_spike_train_list,
@@ -89,9 +103,9 @@ def plot_summary_for_unit(unit_id, analyzer, sorter_name, ylim=None, unit_for_pl
                                         kernel=kernel)
     
     edge_effect_bin = math.ceil(100/50)
-    time_map = np.arange(0, trial_len, 0.05)
+    time_map = np.arange(0, summary_plot_param['trial_info']['lenght'], 0.05)
     rates = np.array(rates)
-    if trial_len == 9:
+    if summary_plot_param['trial_info']['lenght'] == 9:
         rates = rates[edge_effect_bin:-edge_effect_bin]
         time_map = time_map[edge_effect_bin:-edge_effect_bin]
     rate_zscored = stats.zscore(rates)
@@ -108,7 +122,7 @@ def plot_summary_for_unit(unit_id, analyzer, sorter_name, ylim=None, unit_for_pl
     ax1.set_ylabel('Freqeuncy (Hz)')
 
     plot_time_histogram(histogram, units='s', axes=ax1)
-    ax1.set_xlim(0, trial_len)
+    ax1.set_xlim(0, summary_plot_param['trial_info']['lenght'])
     sw.plot_spike_locations(analyzer, unit_ids=[unit_id], ax=ax7, with_channel_ids=True)
     ax7.set_title('Unit localisation')
     sw.plot_unit_waveforms_density_map(analyzer, unit_ids=[unit_id], ax=ax2)
@@ -126,7 +140,7 @@ def plot_summary_for_unit(unit_id, analyzer, sorter_name, ylim=None, unit_for_pl
         mean_residual = np.mean(np.abs((current_channel_waveform - current_channel_waveform.mean(axis=0))), axis=0)
 
         curent_ax.plot(mean_residual)
-        curent_ax.set_title('Mean residual of the waveform for channel '+str(analyzer.channel_ids[max_channel]))
+        curent_ax.set_title('Mean residual of the\nwaveform for channel '+str(analyzer.channel_ids[max_channel]))
         if ylim is not None:
             curent_ax.set_ylim(ylim)
     
@@ -134,7 +148,7 @@ def plot_summary_for_unit(unit_id, analyzer, sorter_name, ylim=None, unit_for_pl
     waveform = get_highest_amplitude_channel(waveform).T
     ax5.plot(waveform, alpha=0.1, color='b')
     ax5.plot(np.median(waveform, axis=1), color='r', alpha=1)
-    ax5.set_title('Waveform of all spike (at max channel)')
+    ax5.set_title('Waveform of all spike\n(at max channel)')
     plt.tight_layout()
 
     rasterplot_rates(current_spike_train_list, ax=ax6, histscale=0.1)
@@ -149,8 +163,8 @@ def plot_summary_for_unit(unit_id, analyzer, sorter_name, ylim=None, unit_for_pl
 def parallel_plot_summary(args):
     return plot_summary_for_unit(*args)
 
-def plot_sorting_summary(analyzer, sorter_name, save_extention=False, save_path=None, trial_len=9, acelerate=False, event_dict=None):
-    load_or_compute_extension(analyzer, ['random_spikes', 'waveforms', 'templates', 'spike_locations'], save_extention)
+def plot_sorting_summary(analyzer, sorter_name, summary_plot_param, save_path=None, acelerate=False, event_dict=None):
+    load_or_compute_extension(analyzer, ['random_spikes', 'waveforms', 'templates', 'spike_locations'])
     
     max_unit_amplitude = 0
     min_unit_amplitude = 0
@@ -174,5 +188,12 @@ def plot_sorting_summary(analyzer, sorter_name, save_extention=False, save_path=
              pool.map(parallel_plot_summary, args)
     else:
         for unit_id in tqdm(analyzer.unit_ids, desc='Plot sorting summary', bar_format='{l_bar}{bar}\n'):
-            plot_summary_for_unit(unit_id, analyzer, sorter_name, ylim, None, save_path, trial_len, event_dict=event_dict)
+            plot_summary_for_unit(unit_id=unit_id, 
+                                  analyzer=analyzer, 
+                                  sorter_name=sorter_name, 
+                                  summary_plot_param=summary_plot_param,
+                                  ylim=ylim, 
+                                  unit_for_plot_name=None, 
+                                  save_path=save_path,
+                                  event_dict=event_dict)
             

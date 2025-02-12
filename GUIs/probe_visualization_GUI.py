@@ -18,16 +18,22 @@ class probe_visualization_GUI:
         self.window = None
 
         
-    def create_window(self, probe):
+    def create_window(self, probe, recording):
         # PySimpleGUI layout
      
         layout = [ [sg.Canvas(key='-CANVAS-')] ]
 
         # Create the window
-        self.window = sg.Window('Probe visualisation window', layout, element_justification='center', finalize=True)
+        if self.window is not None:
+            location = self.window.current_location()
+            self.window.close()
+        else:
+            location = None
+            
+        self.window = sg.Window('Probe visualisation window', layout, element_justification='center', finalize=True, location=location)
         
         self.fig, self.ax = plt.subplots(figsize=(9, 7))
-        self.create_figure(probe)
+        self.create_figure(probe, recording)
         
     def draw_figure(self, canvas):
         figure_canvas_agg = FigureCanvasTkAgg(self.fig, canvas)
@@ -36,7 +42,7 @@ class probe_visualization_GUI:
         return figure_canvas_agg
 
     
-    def create_figure(self, probe):
+    def create_figure(self, probe, recording):
         plt.ioff()  # Disable interactive mode
     
         # Clear the previous figure from the Tkinter canvas if it exists
@@ -48,8 +54,16 @@ class probe_visualization_GUI:
         self.ax.clear()
     
         
-
-        _ = plot_probe(probe, ax=self.ax, show_channel_on_click=True)
+        if probe.contact_ids is not None:
+            text_on_contact = probe.contact_ids
+        elif recording is not None:
+            text_on_contact = [None]*len(recording.channel_ids)
+            for indx, device_channel_indice in enumerate(probe.device_channel_indices):
+                text_on_contact[indx] = recording.channel_ids[device_channel_indice]
+        else:
+            text_on_contact = None
+            
+        _ = plot_probe(probe, ax=self.ax, text_on_contact=text_on_contact)
         
         self.fig.tight_layout()
         plt.ion()

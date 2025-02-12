@@ -13,7 +13,6 @@ from additional.toolbox import largest_power_of_ten
 
 class trace_visualization_GUI:
     
-    
     def __init__(self):
         self.window = None
         self.time_slider_resolution = None
@@ -29,9 +28,8 @@ class trace_visualization_GUI:
         else:
             self.time_slider_range = (base_instance.recording.get_times()[0], base_instance.recording.get_times()[-1]-self.time_window_size)
         
-        
         checkbox_channel = [[sg.Checkbox(channel_id, key=f'channel_checkbox_{channel_id}', enable_events=True, default=True)] for channel_id in base_instance.recording.get_channel_ids()]
-
+        checkbox_channel.insert(0, [sg.T('Channels:')])
         checkbox_column = sg.Column(checkbox_channel, size=(200, 300), scrollable=True, vertical_scroll_only=True, expand_y=True)
         
         # Buttons for select/deselect all
@@ -63,7 +61,13 @@ class trace_visualization_GUI:
         ]
 
         # Create the window
-        self.window = sg.Window('Trace visualisation window', layout, element_justification='center', finalize=True)
+        if self.window is not None:
+            location = self.window.current_location()
+            self.window.close()
+        else:
+            location = None
+            
+        self.window = sg.Window('Trace visualisation window', layout, element_justification='center', finalize=True, location=location)
         
         self.fig, self.ax = plt.subplots(figsize=(9, 7))
         self.create_figure(base_instance.recording.channel_ids, base_instance.recording)
@@ -94,13 +98,11 @@ class trace_visualization_GUI:
     
         # Clear the existing axes to prevent over-plotting
         self.ax.clear()
-    
         # Replot the traces on the cleared axes
         plot_traces(recording=recording, 
                     backend="matplotlib", 
                     ax=self.ax, 
                     channel_ids=selected_channels, 
-                    order_channel_by_depth=recording.has_probe(),
                     time_range=time_range,
                     show_channel_ids=True)
         
@@ -137,8 +139,8 @@ class trace_visualization_GUI:
                 time_slider_range_min = base_instance.recording.get_times()[0]       
             
             time_slider_range_max = float(values['time_slider'])+self.time_slider_resolution*100*(1-slider_current_postion)
-            if time_slider_range_max > base_instance.recording.get_times()[-1]:
-                time_slider_range_max = base_instance.recording.get_times()[-1]
+            if time_slider_range_max >= base_instance.recording.get_times()[-1]:
+                time_slider_range_max = base_instance.recording.get_times()[-1] - self.time_window_size
             
             self.time_slider_range = (time_slider_range_min, time_slider_range_max)
             self.window['time_slider'].update(range=self.time_slider_range)
@@ -147,8 +149,8 @@ class trace_visualization_GUI:
             if values['time_slider'] > self.time_slider_range[0]+(self.time_slider_resolution*75) and self.time_slider_range[1] != base_instance.recording.get_times()[-1]:
                 time_slider_new_range_min = values['time_slider'] - (self.time_slider_resolution*75)
                 time_slider_new_range_max = values['time_slider'] + (self.time_slider_resolution*25)
-                if time_slider_new_range_max > base_instance.recording.get_times()[-1]:
-                    time_slider_new_range_max = base_instance.recording.get_times()[-1]
+                if time_slider_new_range_max >= base_instance.recording.get_times()[-1]:
+                    time_slider_new_range_max = base_instance.recording.get_times()[-1] - self.time_window_size
                 slider_change = True
                     
             elif values['time_slider'] < self.time_slider_range[0]+(self.time_slider_resolution*25) and self.time_slider_range[0] != base_instance.recording.get_times()[0]:
@@ -170,6 +172,13 @@ class trace_visualization_GUI:
         if len(selected_channels) == 0:
             sg.popup_error('At least one channel need to be selected')
             return
+        
+        for indx, channel in enumerate(selected_channels): #this is to prevent crashing when the id are not string in the recording
+            if channel not in base_instance.recording.get_channel_ids():
+                if int(channel) in base_instance.recording.get_channel_ids():
+                    selected_channels[indx] = int(channel)
+                elif float(channel) in base_instance.recording.get_channel_ids():
+                    selected_channels[indx] = float(channel)
             
         time_range = (values['time_slider'], values['time_slider']+self.time_window_size)
         self.create_figure(selected_channels, base_instance.recording, time_range=time_range)

@@ -10,21 +10,42 @@ import math
 import tkinter as tk
 from PySimpleGUI import Graph
 import time
+import numpy as np
 
 from spikeinterface.extractors import read_intan
 from spikeinterface.core import BinaryFolderRecording, BinaryRecordingExtractor, ZarrRecordingExtractor
 import spikeinterface.sorters.sorterlist as sorterlist
+from spikeinterface.core.job_tools import get_best_job_kwargs
 
-ephy_extension_dict = {'rhd': lambda x:read_intan(x, stream_id='0'),
-                           'intan': lambda x:read_intan(x, stream_id='0'),
-                           'folder_binary': lambda x:BinaryFolderRecording(x),
-                           'binary': lambda x:BinaryRecordingExtractor(x),
-                           'zarr': lambda x:ZarrRecordingExtractor(x),
-                           }
+ephy_extractor_dict = {'file': {
+                                'Binary': {'function': lambda x:BinaryRecordingExtractor(**x), 'path_syntax': 'file_paths', 'args': ['sampling_frequency',
+                                                                                                                                    'dtype',
+                                                                                                                                    'num_channels',
+                                                                                                                                    ]},
+                                'Intan': {'function': lambda x:read_intan(**x, stream_id='0'), 'path_syntax': 'file_path', 'args': [], 'extension': 'rhd'},
+                                },
+                       'folder': {'Binary': {'function': lambda x:BinaryFolderRecording(**x), 'path_syntax': 'folder_path', 'args': []},                  
+                                  'Zarr': {'function': lambda x:ZarrRecordingExtractor(**x), 'path_syntax': 'folder_path', 'args': []},
+                                  }
+                       }
 
-availabled_extention = ['intan', 'binary', 'zarr']
+availabled_dtype = {'float64': np.float64, 
+                    'int16': np.int16, 
+                    'int32': np.int32}
 
+def get_availabled_extension_extractor_converter_dict(mode):
+    extension_extractor_converter_dict = {}
+    for extractor_name, extractor_dict in ephy_extractor_dict[mode].items():
+        if 'extension' in extractor_dict.keys():
+            extension_extractor_converter_dict[extractor_dict['extension']] = extractor_name
+    return extension_extractor_converter_dict
 
+def get_availabled_extractor(mode):
+    if mode == 'file':
+        return list(ephy_extractor_dict['file'].keys())
+    elif mode == 'folder':
+        return list(ephy_extractor_dict['folder'].keys())
+    
 def led_loading_animation(window, base_instance):
     while base_instance.state is not None:
         if base_instance.state is not None and base_instance.state != 'launch':
@@ -66,7 +87,7 @@ def get_default_param():
          default_param = json.load(file)
     return default_param
 
-def load_or_compute_extension(analyzer, extension_list, save_extention=True, extension_params=None):
+def load_or_compute_extension(analyzer, extension_list, extension_params=None):
     if not isinstance(extension_list, list) or isinstance(extension_list, tuple):
         extension_list = [extension_list]
         
@@ -76,8 +97,8 @@ def load_or_compute_extension(analyzer, extension_list, save_extention=True, ext
         if extension_statues is None:
             extention_to_be_computes.append(extension_name)
             
+            
     if extention_to_be_computes:
-        
         if extension_params is not None:
             use_extension_params = False 
             for extention_name in extention_to_be_computes:
@@ -86,9 +107,9 @@ def load_or_compute_extension(analyzer, extension_list, save_extention=True, ext
                     break
             
         if extension_params is None or not use_extension_params:
-            analyzer.compute(extention_to_be_computes, save=save_extention)
+            analyzer.compute(extention_to_be_computes, verbose=True, **get_best_job_kwargs())
         else:
-            analyzer.compute(extention_to_be_computes, save=save_extention, extension_params=extension_params)
+            analyzer.compute(extention_to_be_computes, verbose=True, extension_params=extension_params, **get_best_job_kwargs())
 
 def largest_power_of_ten(num):
     if num == 0:

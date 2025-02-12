@@ -73,7 +73,13 @@ class unit_auto_cleaning_GUI:
                 [sg.B('Save', k='save_unit_auto_cleaning_param_button'), sg.B('Reset', k='reset_unit_auto_cleaning_param_button')],
                 ]
         
-        self.window = sg.Window('Custom cleaning parameters', layout, finalize=True)
+        if self.window is not None:
+            location = self.window.current_location()
+            self.window.close()
+        else:
+            location = None
+            
+        self.window = sg.Window('Custom cleaning parameters', layout, finalize=True, location=location)
     
     def save_parameters(self):
         
@@ -112,7 +118,10 @@ class unit_auto_cleaning_GUI:
             current_param = self.save_parameters()
             if current_param != base_instance.pipeline_parameters['unit_auto_cleaning_param']:
                 if base_instance.state is not None:
-                    sg.popup_error('Parameters can not while a analysis is in progress')
+                    save_changes_answer = sg.popup_yes_no('Parameters can not while a analysis is in progress. Close anyway?')
+                    if save_changes_answer == 'Yes':
+                        self.window.close()
+                        self.window = None
                 else:
                     save_changes_answer = sg.popup_yes_no('Save changes?')
                     if save_changes_answer == 'Yes':

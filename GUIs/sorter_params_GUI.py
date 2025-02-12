@@ -23,7 +23,7 @@ class sorter_param_GUI:
         for current_param_name, current_param_value in sorter_values.items():
             
             if current_param_name in sorter_param_description_dict:
-                tooltip = sorter_param_description_dict[self.sorter_name]
+                tooltip = sorter_param_description_dict[current_param_name]
             else:
                 tooltip = None
             
@@ -49,8 +49,13 @@ class sorter_param_GUI:
         
         layout = [[sg.Frame(layout=layout,title=f'{self.sorter_name} parmeters', relief=sg.RELIEF_SUNKEN)],
                   [sg.B('Save', k='save_param'), sg.B('Reset', k='reset_param')]]
-        
-        self.window(sg.Window('Sorter parameters', layout, finalize=True))
+        if self.window is not None:
+            location = self.window.current_location()
+            self.window.close()
+        else:
+            location = None
+            
+        self.window = sg.Window('Sorter parameters', layout, finalize=True, location=location)
     
     def convert_str_to_param(self, str_value):
             if str_value == 'None' or '':
@@ -93,13 +98,16 @@ class sorter_param_GUI:
         return sorting_param
         
     
-    def sorting_param_event_handler(self, values, event, base_instance):
+    def event_handler(self, values, event, base_instance):
         
         if event == sg.WIN_CLOSED:
             sorting_param = self.save_param(copy.deepcopy(base_instance.pipeline_parameters['sorting_param']))
             if sorting_param != base_instance.pipeline_parameters['sorting_param']:
                 if base_instance.state is not None:
-                    sg.popup_error('Parameters can not while a analysis is in progress')
+                    save_changes_answer = sg.popup_yes_no('Parameters can not while a analysis is in progress. Close anyway?')
+                    if save_changes_answer == 'Yes':
+                        self.window.close()
+                        self.window = None
                 else:
                     save_changes_answer = sg.popup_yes_no('Save changes?')
                     if save_changes_answer == 'Yes':
