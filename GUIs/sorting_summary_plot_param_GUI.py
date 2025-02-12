@@ -81,6 +81,7 @@ class sorting_summary_plot_param_GUI:
         if event == sg.WIN_CLOSED:
             current_param = self.save_parameters()
             if current_param != base_instance.pipeline_parameters['summary_plot_param']:
+                
                 save_changes_answer = sg.popup_yes_no('Save changes?')
                 if save_changes_answer == 'Yes':
                     base_instance.pipeline_parameters['summary_plot_param'] = current_param

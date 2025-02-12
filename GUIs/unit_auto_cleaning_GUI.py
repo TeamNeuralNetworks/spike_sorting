@@ -117,8 +117,8 @@ class unit_auto_cleaning_GUI:
         if event == sg.WIN_CLOSED:
             current_param = self.save_parameters()
             if current_param != base_instance.pipeline_parameters['unit_auto_cleaning_param']:
-                if base_instance.state is not None:
-                    save_changes_answer = sg.popup_yes_no('Parameters can not while a analysis is in progress. Close anyway?')
+                if base_instance.state == 'unit_auto_cleaning':
+                    save_changes_answer = sg.popup_yes_no('Parameters can not be saved while a analysis is in progress. Close anyway?')
                     if save_changes_answer == 'Yes':
                         self.window.close()
                         self.window = None

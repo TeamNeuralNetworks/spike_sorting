@@ -343,7 +343,7 @@ class Spike_sorting:
                                         ) 
                 
                 self.pipeline_parameters['unit_auto_cleaning'] = 'Done'            
-                with open(f"{self.pipeline_parameters['output_folder_path']}/{self.pipeline_parameters['name']}/unit auto cleaning/pipeline_param.json", "w") as outfile: 
+                with open(f"{self.pipeline_parameters['output_folder_path']}/{self.pipeline_parameters['name']}/unit_auto_cleaning/pipeline_param.json", "w") as outfile: 
                     json.dump(self.pipeline_parameters, outfile)
                 
                 if self.pipeline_parameters['summary_plot_param']['auto_save']['activate']:

@@ -10,6 +10,7 @@ from spikeinterface.postprocessing import align_sorting
 from spikeinterface import get_template_extremum_channel_peak_shift
 import spikeinterface.qualitymetrics as sqm
 
+from multiprocessing import Lock, Process, Queue, current_process
 import matplotlib.pyplot as plt
 import numpy as np
 import os
@@ -221,6 +222,10 @@ def split_noise_from_unit(analyzer, cs, window, df_cleaning_summary, min_spike_p
                           method='phate', n_components=10,
                           channel_mode='concatenate',
                           **kwargs):
+    
+    tasks_to_accomplish = Queue()
+    tasks_that_are_done = Queue()
+    processes = []
     
     load_or_compute_extension(analyzer, ['random_spikes', 'templates', 'waveforms'], extension_params={"random_spikes":{"method": "all"}})
     
