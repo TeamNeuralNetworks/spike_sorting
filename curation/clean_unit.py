@@ -229,12 +229,18 @@ def split_noise_from_unit(analyzer, cs, window, df_cleaning_summary, min_spike_p
     
     new_df_row_list = []
     
+    
     with mp.Manager() as manager:
         splitting_results_dict = manager.dict()
         result_message = manager.list()
         processes = []
         for unit_idx, unit_id in enumerate(analyzer.unit_ids):
             waveforms = analyzer.get_extension('waveforms').get_waveforms_one_unit(unit_id=unit_id, force_dense=True)
+            if channel_mode == 'concatenate':
+                waveforms = waveforms.transpose(0, 2, 1).reshape(waveforms.shape[0], -1)
+            elif channel_mode == 'highest':
+                waveforms = get_highest_amplitude_channel(waveforms)
+                
             if method in ['phate', 'pca']:
                 processes.append(mp.Process(target=compute_best_split_using_silhouette, args=(splitting_results_dict, result_message, waveforms, method, n_components, max_split, threshold, unit_id, unit_idx, verbose, len(analyzer.unit_ids))))
             elif method == 'template_as_ref':
