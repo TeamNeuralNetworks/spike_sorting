@@ -158,9 +158,9 @@ class Spike_sorting_MAIN:
                 mode = 'manual curation'
                 if 'manual curation' in folder_list:
                     path = fr'{path}\{mode}'
-            elif 'unit auto cleaning' in folder_list or os.path.basename(path) == 'unit auto cleaning':
-                mode = 'unit auto cleaning'
-                if 'unit auto cleaning' in folder_list:
+            elif 'unit auto cleaning' in folder_list or os.path.basename(path) == 'unit_auto_cleaning':
+                mode = 'unit_auto_cleaning'
+                if 'unit_auto_cleaning' in folder_list:
                     path = fr'{path}\{mode}'
     
             elif 'base_sorting' in folder_list or os.path.basename(path) == 'base_sorting':

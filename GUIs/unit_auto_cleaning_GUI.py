@@ -59,6 +59,9 @@ class unit_auto_cleaning_GUI:
                                    [sg.T('L-ratio', tooltip='This metric identifies unit separation, a high value indicates a highly contaminated unit. Each unit must be below the treshold to be selected.'), sg.Checkbox('', default=unit_auto_cleaning_param['remove_by_metric']['L_ratio_activate'], k=('remove_by_metric', 'L_ratio_activate'), tooltip='This metric identifies unit separation, a high value indicates a highly contaminated unit. Each unit must be below the treshold to be selected.'),
                                    sg.I(unit_auto_cleaning_param['remove_by_metric']['L_ratio_threshold'], k=('remove_by_metric', 'L_ratio_threshold'), tooltip='This metric identifies unit separation, a high value indicates a highly contaminated unit. Each unit must be below the treshold to be selected.', size=default_input_size)],
                                    
+                                   #TODO It would be nice to be able to automaticly remove units that are clearly artefect (not spike shaped) that would have resulted from the split module
+                                   #Maybe by comparing the silouette the mean wavform with the mean waveform of all spikes or something like that (would'nt work for heavely contamineted recording)
+                                   
                                    ]
         additional_param_layout = [[sg.T('Rename units', tooltip='If selected will rename units (if 10 units remain at the end of the pipeline the units number will go from 0 to 10)'), sg.Checkbox('', default=unit_auto_cleaning_param['rename_unit']['activate'], k=('rename_unit', 'activate'), tooltip='If selected will rename units (if 10 units remain at the end of the pipeline the units number will go from 0 to 10)')],
                                    [sg.T('Plot cleaning summary', tooltip='If selected will plot a summary of the cleaning done for each remaining unit'), sg.Checkbox('', default=unit_auto_cleaning_param['plot_cleaning_summary']['activate'], k=('plot_cleaning_summary', 'activate'), tooltip='If selected will plot a summary of the cleaning done for each remaining unit')],
@@ -117,8 +120,8 @@ class unit_auto_cleaning_GUI:
         if event == sg.WIN_CLOSED:
             current_param = self.save_parameters()
             if current_param != base_instance.pipeline_parameters['unit_auto_cleaning_param']:
-                if base_instance.state is not None:
-                    save_changes_answer = sg.popup_yes_no('Parameters can not while a analysis is in progress. Close anyway?')
+                if base_instance.state == 'unit_auto_cleaning':
+                    save_changes_answer = sg.popup_yes_no('Parameters can not be saved while a analysis is in progress. Close anyway?')
                     if save_changes_answer == 'Yes':
                         self.window.close()
                         self.window = None
