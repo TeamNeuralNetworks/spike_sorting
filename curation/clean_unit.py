@@ -240,17 +240,21 @@ def split_noise_from_unit(analyzer, cs, window, df_cleaning_summary, min_spike_p
                 waveforms = waveforms.transpose(0, 2, 1).reshape(waveforms.shape[0], -1)
             elif channel_mode == 'highest':
                 waveforms = get_highest_amplitude_channel(waveforms)
-                
-            if method in ['phate', 'pca']:
-                processes.append(mp.Process(target=compute_best_split_using_silhouette, args=(splitting_results_dict, result_message, waveforms, method, n_components, max_split, threshold, unit_id, unit_idx, verbose, len(analyzer.unit_ids))))
-            elif method == 'template_as_ref':
-                template = analyzer.get_extension('templates').get_unit_template(unit_id=unit_id)
-                if channel_mode == 'concatenate':
-                    template = template.T.ravel()
-                elif channel_mode == 'highest':
-                    template = get_highest_amplitude_channel(np.array([template]))
-                processes.append(mp.Process(target=compute_best_split_using_template_as_ref, args=(template, result_message, waveforms, n_components, max_split, unit_id, unit_idx, verbose, len(analyzer.unit_ids))))
-                save_plot = None
+            
+            if waveforms.shape[0] > min_spike_per_unit:
+                if method in ['phate', 'pca']:
+                    processes.append(mp.Process(target=compute_best_split_using_silhouette, args=(splitting_results_dict, result_message, waveforms, method, n_components, max_split, threshold, unit_id, unit_idx, verbose, len(analyzer.unit_ids))))
+                elif method == 'template_as_ref':
+                    template = analyzer.get_extension('templates').get_unit_template(unit_id=unit_id)
+                    if channel_mode == 'concatenate':
+                        template = template.T.ravel()
+                    elif channel_mode == 'highest':
+                        template = get_highest_amplitude_channel(np.array([template]))
+                    processes.append(mp.Process(target=compute_best_split_using_template_as_ref, args=(template, result_message, waveforms, n_components, max_split, unit_id, unit_idx, verbose, len(analyzer.unit_ids))))
+                    save_plot = None
+            else:
+                cs.remove_unit(unit_id=unit_id)
+                print(f'Unit {unit_idx}/{len(analyzer.unit_ids)}--> Unit removed for not enought spike')
     
     for process in processes:
         process.start()
