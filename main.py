@@ -37,7 +37,7 @@ warnings.filterwarnings('ignore', category=UserWarning)
 default_param = {}
 
 
-class Spike_sorting:
+class Spike_sorting_MAIN:
     
     def __init__(self):
         
@@ -168,7 +168,7 @@ class Spike_sorting:
                 if 'base_sorting' in folder_list:
                     path = fr'{path}\{mode}'
             else:
-                self.window.write_event_value('popup_error', 'No anlysis pipeline find')
+                self.Main_GUI_instance.window.write_event_value('popup_error', 'No anlysis pipeline find')
                 return
             
             try:
@@ -316,7 +316,7 @@ class Spike_sorting:
                                                     ms_before=2, ms_after=5,
                                                     )
                 self.pipeline_parameters['sorting'] = 'Done'
-                self.Main_GUI_instance.window['unit_found'].update(f'{len(self.analyzer.unit_ids())} Units found.')
+                self.Main_GUI_instance.window['unit_found'].update(f'{len(self.analyzer.unit_ids)} Units found.')
                 
                 with open(f"{self.pipeline_parameters['output_folder_path']}/{self.pipeline_parameters['name']}/base_sorting/pipeline_param.json", "w") as outfile: 
                     json.dump(self.pipeline_parameters, outfile)
@@ -343,7 +343,7 @@ class Spike_sorting:
                                         ) 
                 
                 self.pipeline_parameters['unit_auto_cleaning'] = 'Done'            
-                with open(f"{self.pipeline_parameters['output_folder_path']}/{self.pipeline_parameters['name']}/unit auto cleaning/pipeline_param.json", "w") as outfile: 
+                with open(f"{self.pipeline_parameters['output_folder_path']}/{self.pipeline_parameters['name']}/unit_auto_cleaning/pipeline_param.json", "w") as outfile: 
                     json.dump(self.pipeline_parameters, outfile)
                 
                 if self.pipeline_parameters['summary_plot_param']['auto_save']['activate']:
@@ -354,7 +354,7 @@ class Spike_sorting:
                                          )
                 
                 
-                self.Main_GUI_instance.window['unit_found'].update(f'{len(self.analyzer.unit_ids())} Units after cleaning.')
+                self.Main_GUI_instance.window['unit_found'].update(f'{len(self.analyzer.unit_ids)} Units after cleaning.')
                 SetLED(self.Main_GUI_instance.window, 'led_unit_auto_cleaning', 'green')
                 print('Done')
                 print('##########################################')
@@ -372,7 +372,7 @@ class Spike_sorting:
                     json.dump(self.pipeline_parameters, outfile)
                 
                 SetLED(self.Main_GUI_instance.window, 'led_Manual', 'green')
-                self.Main_GUI_instance.window['unit_found'].update(f'{len(self.analyzer.unit_ids())} Units after curation.')
+                self.Main_GUI_instance.window['unit_found'].update(f'{len(self.analyzer.unit_ids)} Units after curation.')
                 print('Done')
                 print('##########################################')
             self.state = None
@@ -410,4 +410,4 @@ class Spike_sorting:
 
 
 if __name__ == "__main__":
-    sorting_main = Spike_sorting()
+    sorting_main = Spike_sorting_MAIN()
