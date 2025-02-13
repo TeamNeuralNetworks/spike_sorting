@@ -88,6 +88,7 @@ def manual_curation_module(base_instance, save_path):
                                 excluded_list.append(label)
                         excluded_list = list(set(excluded_list))
                         
+                        print(excluded_list,sortingview_curation_dict)
                         base_instance.analyzer = apply_sortingview_curation(base_instance.analyzer, 
                                                                             uri_or_json=base_instance.pipeline_parameters['manual_curation_param']['inputlink'],
                                                                             exclude_labels=excluded_list)                

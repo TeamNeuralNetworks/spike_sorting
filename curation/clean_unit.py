@@ -198,9 +198,9 @@ def compute_best_split_using_silhouette(splitting_results_dict, result_message, 
     
     if verbose:
         if len(set(group_array)) > 1:
-            result_message.append((False, f'Unit {unit_idx+1}/{total_numbder_of_unit}--> {len(set(group_array))} split'))
+            result_message.append([unit_id, f'Unit {unit_idx+1}/{total_numbder_of_unit}--> {len(set(group_array))} split'])
         else:
-            result_message.append((False, f'Unit {unit_idx+1}/{total_numbder_of_unit}--> No split performed'))
+            result_message.append([unit_id, f'Unit {unit_idx+1}/{total_numbder_of_unit}--> No split performed'])
     
     splitting_results_dict[unit_id] = {'unit_idx': unit_idx, 'principal_components': principal_components, 'group_array': group_array, 'best_silhouette_score': best_silhouette_score}
 
@@ -211,11 +211,12 @@ def compute_best_split_using_template_as_ref(splitting_results_dict, result_mess
     
     if verbose:
         if len(set(group_array)) > 1:
-            result_message.append((False, f'Unit {unit_idx+1}/{total_numbder_of_unit}--> {len(set(group_array))} split'))
+            result_message.append([unit_id, f'Unit {unit_idx+1}/{total_numbder_of_unit}--> {len(set(group_array))} split'])
         else:
-            result_message.append((False, f'Unit {unit_idx+1}/{total_numbder_of_unit}--> No split performed'))
+            result_message.append([unit_id, f'Unit {unit_idx+1}/{total_numbder_of_unit}--> No split performed'])
 
     splitting_results_dict[unit_id] = {'unit_idx': unit_idx, 'group_array': group_array}
+
 
 def split_noise_from_unit(analyzer, cs, window, df_cleaning_summary, min_spike_per_unit=50, 
                           threshold=0.2, max_split=10, 
@@ -232,7 +233,12 @@ def split_noise_from_unit(analyzer, cs, window, df_cleaning_summary, min_spike_p
     
     with mp.Manager() as manager:
         splitting_results_dict = manager.dict()
-        result_message = manager.list()
+        if verbose:
+            result_message = manager.list()
+        else:
+            result_message = None
+            
+        print('Initializing splitting processes, please wait...')
         processes = []
         for unit_idx, unit_id in enumerate(analyzer.unit_ids):
             waveforms = analyzer.get_extension('waveforms').get_waveforms_one_unit(unit_id=unit_id, force_dense=True)
@@ -252,81 +258,78 @@ def split_noise_from_unit(analyzer, cs, window, df_cleaning_summary, min_spike_p
                         template = get_highest_amplitude_channel(np.array([template]))
                     processes.append(mp.Process(target=compute_best_split_using_template_as_ref, args=(template, result_message, waveforms, n_components, max_split, unit_id, unit_idx, verbose, len(analyzer.unit_ids))))
                     save_plot = None
-            else:
-                cs.remove_unit(unit_id=unit_id)
-                print(f'Unit {unit_idx}/{len(analyzer.unit_ids)}--> Unit removed for not enought spike')
+            
     
-    for process in processes:
-        process.start()
-    
-    if verbose:
-        while len(result_message) != len(processes):
-            for message_tuple in result_message:
-                if not result_message[0]:
-                    print(result_message[1])
-            sleep(0.1)
-    else:
-        for porcess in processes:
-            process.join()
-
-    
-    for unit_id, results_dict in splitting_results_dict.items():
+        for process in processes:
+            process.start()
         
-            if len(set(results_dict['group_array'])) > 1:
-               
-                cs, new_unit_id_list = perform_split(cs, unit_id, results_dict['group_array'], remove_first_index_unit=False)
+        if verbose:
+            unit_done_splitting = []
+            while len(result_message) != len(processes):
+                for message_indx, message_tuple in enumerate(result_message):
+                    if message_tuple[0] not in unit_done_splitting:
+                        print(message_tuple[1])
+                        unit_done_splitting.append(message_tuple[0])
+                sleep(0.1)
+        else:
+            for porcess in processes:
+                process.join()
 
-                
-                for new_unit_id in new_unit_id_list:
+        for unit_id, results_dict in splitting_results_dict.items():
+            
+                if len(set(results_dict['group_array'])) > 1:
+                   
+                    cs, new_unit_id_list = perform_split(cs, unit_id, results_dict['group_array'], remove_first_index_unit=False)
+    
+                    
+                    for new_unit_id in new_unit_id_list:
+                        current_unit_df_cleaning_summary = df_cleaning_summary[df_cleaning_summary[df_cleaning_summary.columns[-1]] == unit_id]
+                        assert len(current_unit_df_cleaning_summary) == 1, "there cannot be two unit with the same id"
+                        new_df = current_unit_df_cleaning_summary.copy()
+                        new_df['Remove noise by splitting'] = [new_unit_id]
+                        new_df_row_list.append(new_df)
+                else:                
                     current_unit_df_cleaning_summary = df_cleaning_summary[df_cleaning_summary[df_cleaning_summary.columns[-1]] == unit_id]
                     assert len(current_unit_df_cleaning_summary) == 1, "there cannot be two unit with the same id"
                     new_df = current_unit_df_cleaning_summary.copy()
-                    new_df['Remove noise by splitting'] = [new_unit_id]
+                    new_df['Remove noise by splitting'] = [unit_id]
                     new_df_row_list.append(new_df)
-            else:                
-                current_unit_df_cleaning_summary = df_cleaning_summary[df_cleaning_summary[df_cleaning_summary.columns[-1]] == unit_id]
-                assert len(current_unit_df_cleaning_summary) == 1, "there cannot be two unit with the same id"
-                new_df = current_unit_df_cleaning_summary.copy()
-                new_df['Remove noise by splitting'] = [unit_id]
-                new_df_row_list.append(new_df)
+                    
                 
-            
-            if save_plot is not None:
-                number_ofcluster = len(np.unique(results_dict['group_array']))
-                fig= plt.figure(figsize=(12,8))
-                ax = fig.add_subplot(111, projection='3d')
-                ax.set_title(f'Unit {unit_id}, {round(results_dict["best_silhouette_score"], 3)}')
-                # Set labels for the axes
-                ax.set_xlabel('Principal Component 1')
-                ax.set_ylabel('Principal Component 2')
-                ax.set_zlabel('Principal Component 3')
-                
-                fig_cluster = plt.figure(figsize=(12,8))
-                fig_cluster.suptitle(f'Unit {unit_id}')
-                ax_indx = 0
-                for group in np.unique(results_dict['group_array']):
-                    mask = results_dict['group_array'] == group
-                    ax.scatter(results_dict['principal_components[mask, 0]'],
-                                results_dict['principal_components[mask, 1]'], 
-                                results_dict['principal_components[mask, 2]'], 
-                                label=f'Group {group}')
-                    waveforms = analyzer.get_extension('waveforms').get_waveforms_one_unit(unit_id=unit_id, force_dense=True)
-                    waveforms = get_highest_amplitude_channel(waveforms)
-                    ax_indx += 1
-                    current_ax_regular = fig_cluster.add_subplot(number_ofcluster, 1, ax_indx)
-                    current_ax_regular.set_title(f'{group}, number of spikes: {len(waveforms[mask])}')
-                    current_ax_regular.plot(waveforms[mask].T, color='k', alpha=0.1)
-                    current_ax_regular.plot(np.median(waveforms[mask].T, axis=1), color='r', alpha=1)
-
-                ax.legend()
-                if not os.path.isdir(f'{save_plot}/cleaning_summary/splitting_summary'):
-                    os.makedirs(f'{save_plot}/cleaning_summary/splitting_summary')
-                fig.savefig(f'{save_plot}/cleaning_summary/splitting_summary/Unit{unit_id}_3d')
-                fig_cluster.savefig(f'{save_plot}/cleaning_summary/splitting_summary/Unit{unit_id}_ind_cluster')
-                plt.close('all')
-                
-                del unit_id, unit_idx, principal_components, group_array, best_silhouette_score 
-
+                if save_plot is not None:
+                    number_ofcluster = len(np.unique(results_dict['group_array']))
+                    fig= plt.figure(figsize=(12,8))
+                    ax = fig.add_subplot(111, projection='3d')
+                    ax.set_title(f'Unit {unit_id}, {round(results_dict["best_silhouette_score"], 3)}')
+                    # Set labels for the axes
+                    ax.set_xlabel('Principal Component 1')
+                    ax.set_ylabel('Principal Component 2')
+                    ax.set_zlabel('Principal Component 3')
+                    
+                    fig_cluster = plt.figure(figsize=(12,8))
+                    fig_cluster.suptitle(f'Unit {unit_id}')
+                    ax_indx = 0
+                    for group in np.unique(results_dict['group_array']):
+                        mask = results_dict['group_array'] == group
+                        ax.scatter(results_dict['principal_components'][mask, 0],
+                                    results_dict['principal_components'][mask, 1], 
+                                    results_dict['principal_components'][mask, 2], 
+                                    label=f'Group {group}')
+                        waveforms = analyzer.get_extension('waveforms').get_waveforms_one_unit(unit_id=unit_id, force_dense=True)
+                        waveforms = get_highest_amplitude_channel(waveforms)
+                        ax_indx += 1
+                        current_ax_regular = fig_cluster.add_subplot(number_ofcluster, 1, ax_indx)
+                        current_ax_regular.set_title(f'{group}, number of spikes: {len(waveforms[mask])}')
+                        current_ax_regular.plot(waveforms[mask].T, color='k', alpha=0.1)
+                        current_ax_regular.plot(np.median(waveforms[mask].T, axis=1), color='r', alpha=1)
+    
+                    ax.legend()
+                    if not os.path.isdir(f'{save_plot}/cleaning_summary/splitting_summary'):
+                        os.makedirs(f'{save_plot}/cleaning_summary/splitting_summary')
+                    fig.savefig(f'{save_plot}/cleaning_summary/splitting_summary/Unit{unit_id}_3d')
+                    fig_cluster.savefig(f'{save_plot}/cleaning_summary/splitting_summary/Unit{unit_id}_ind_cluster')
+                    plt.close('all')
+                    
     df_cleaning_summary = pd.concat(new_df_row_list)            
     clean_sorting = cs.sorting
     if save_folder is not None:
