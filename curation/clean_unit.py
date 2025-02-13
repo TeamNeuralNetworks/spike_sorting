@@ -22,6 +22,7 @@ from sklearn.decomposition import PCA
 from scipy.cluster.hierarchy import linkage, fcluster
 import pickle
 import shutil
+from time import sleep
 from skimage.filters import threshold_otsu
 
 from additional.toolbox import load_or_compute_extension
@@ -170,7 +171,7 @@ def remove_edge_artefact(analyzer, cs, df_cleaning_summary, save_folder=None, le
 
     return clean_analyzer, df_cleaning_summary
 
-def compute_best_split_using_silhouette(waveforms, method, n_components, max_split, threshold, unit_id, unit_idx, verbose=False, window=None, total_numbder_of_unit=None):
+def compute_best_split_using_silhouette(splitting_results_dict, result_message, waveforms, method, n_components, max_split, threshold, unit_id, unit_idx, verbose=False, total_numbder_of_unit=None):
     
     if method == 'phate':
         phate_operator = phate.PHATE(n_jobs=-2)
@@ -197,67 +198,73 @@ def compute_best_split_using_silhouette(waveforms, method, n_components, max_spl
     
     if verbose:
         if len(set(group_array)) > 1:
-            print(f'Unit {unit_idx+1}/{total_numbder_of_unit}--> {len(set(group_array))} split')
+            result_message.append((False, f'Unit {unit_idx+1}/{total_numbder_of_unit}--> {len(set(group_array))} split'))
         else:
-            print(f'Unit {unit_idx+1}/{total_numbder_of_unit}--> No split performed')
-            
-    return unit_id, unit_idx, principal_components, group_array, best_silhouette_score
+            result_message.append((False, f'Unit {unit_idx+1}/{total_numbder_of_unit}--> No split performed'))
+    
+    splitting_results_dict[unit_id] = {'unit_idx': unit_idx, 'principal_components': principal_components, 'group_array': group_array, 'best_silhouette_score': best_silhouette_score}
 
-def compute_best_split_using_template_as_ref(template, waveforms, n_components, max_split, unit_id, unit_idx, verbose=False, window=None, total_numbder_of_unit=None):
+def compute_best_split_using_template_as_ref(splitting_results_dict, result_message, template, waveforms, n_components, max_split, unit_id, unit_idx, verbose=False, total_numbder_of_unit=None):
     correlation = np.array([np.corrcoef(template, trace)[0, 1] for trace in waveforms])
     threshold = threshold_otsu(correlation)
     group_array = np.array([0 if np.corrcoef(template, trace)[0, 1] >= threshold else 1 for trace in waveforms])
     
     if verbose:
         if len(set(group_array)) > 1:
-            print(f'Unit {unit_idx+1}/{total_numbder_of_unit}--> {len(set(group_array))} split')
+            result_message.append((False, f'Unit {unit_idx+1}/{total_numbder_of_unit}--> {len(set(group_array))} split'))
         else:
-            print(f'Unit {unit_idx+1}/{total_numbder_of_unit}--> No split performed')
-    
-    return unit_id, unit_idx, group_array
+            result_message.append((False, f'Unit {unit_idx+1}/{total_numbder_of_unit}--> No split performed'))
+
+    splitting_results_dict[unit_id] = {'unit_idx': unit_idx, 'group_array': group_array}
 
 def split_noise_from_unit(analyzer, cs, window, df_cleaning_summary, min_spike_per_unit=50, 
                           threshold=0.2, max_split=10, 
                           save_folder=None, save_plot=None, 
                           method='phate', n_components=10,
                           channel_mode='concatenate',
+                          verbose=True,
                           **kwargs):
         
     load_or_compute_extension(analyzer, ['random_spikes', 'templates', 'waveforms'], extension_params={"random_spikes":{"method": "all"}})
     
     new_df_row_list = []
     
-    processes = []
-    for unit_idx, unit_id in enumerate(analyzer.unit_ids):
-        waveforms = analyzer.get_extension('waveforms').get_waveforms_one_unit(unit_id=unit_id, force_dense=True)
-        processes.append(mp.Process(target=compute_best_split_using_silhouette, args=(waveforms, method, n_components, max_split, threshold, unit_id, unit_idx)))
-    
-    
-
-    
-    for unit_idx, unit_id in enumerate(analyzer.unit_ids):
-        waveforms = analyzer.get_extension('waveforms').get_waveforms_one_unit(unit_id=unit_id, force_dense=True)
-        
-        if channel_mode == 'concatenate':
-            waveforms = waveforms.transpose(0, 2, 1).reshape(waveforms.shape[0], -1)
-        elif channel_mode == 'highest':
-            waveforms = get_highest_amplitude_channel(waveforms)
-            
-        if waveforms.shape[0] > min_spike_per_unit:
+    with mp.Manager() as manager:
+        splitting_results_dict = manager.dict()
+        result_message = manager.list()
+        processes = []
+        for unit_idx, unit_id in enumerate(analyzer.unit_ids):
+            waveforms = analyzer.get_extension('waveforms').get_waveforms_one_unit(unit_id=unit_id, force_dense=True)
             if method in ['phate', 'pca']:
-                unit_id, unit_idx, principal_components, group_array, best_silhouette_score = compute_best_split_using_silhouette(waveforms, method, n_components, max_split, threshold, unit_id, unit_idx, verbose=True, window=window, total_numbder_of_unit=len(analyzer.unit_ids))
+                processes.append(mp.Process(target=compute_best_split_using_silhouette, args=(splitting_results_dict, result_message, waveforms, method, n_components, max_split, threshold, unit_id, unit_idx, verbose, len(analyzer.unit_ids))))
             elif method == 'template_as_ref':
                 template = analyzer.get_extension('templates').get_unit_template(unit_id=unit_id)
                 if channel_mode == 'concatenate':
                     template = template.T.ravel()
                 elif channel_mode == 'highest':
                     template = get_highest_amplitude_channel(np.array([template]))
-                unit_id, unit_idx, group_array = compute_best_split_using_template_as_ref(template, waveforms, n_components, max_split, unit_id, unit_idx, verbose=True, window=window, total_numbder_of_unit=len(analyzer.unit_ids))
+                processes.append(mp.Process(target=compute_best_split_using_template_as_ref, args=(template, result_message, waveforms, n_components, max_split, unit_id, unit_idx, verbose, len(analyzer.unit_ids))))
                 save_plot = None
-                
-            if len(set(group_array)) > 1:
+    
+    for process in processes:
+        process.start()
+    
+    if verbose:
+        while len(result_message) != len(processes):
+            for message_tuple in result_message:
+                if not result_message[0]:
+                    print(result_message[1])
+            sleep(0.1)
+    else:
+        for porcess in processes:
+            process.join()
+
+    
+    for unit_id, results_dict in splitting_results_dict.items():
+        
+            if len(set(results_dict['group_array'])) > 1:
                
-                cs, new_unit_id_list = perform_split(cs, unit_id, group_array, remove_first_index_unit=False)
+                cs, new_unit_id_list = perform_split(cs, unit_id, results_dict['group_array'], remove_first_index_unit=False)
 
                 
                 for new_unit_id in new_unit_id_list:
@@ -275,10 +282,10 @@ def split_noise_from_unit(analyzer, cs, window, df_cleaning_summary, min_spike_p
                 
             
             if save_plot is not None:
-                number_ofcluster = len(np.unique(group_array))
+                number_ofcluster = len(np.unique(results_dict['group_array']))
                 fig= plt.figure(figsize=(12,8))
                 ax = fig.add_subplot(111, projection='3d')
-                ax.set_title(f'Unit {unit_id}, {round(best_silhouette_score, 3)}')
+                ax.set_title(f'Unit {unit_id}, {round(results_dict["best_silhouette_score"], 3)}')
                 # Set labels for the axes
                 ax.set_xlabel('Principal Component 1')
                 ax.set_ylabel('Principal Component 2')
@@ -287,11 +294,11 @@ def split_noise_from_unit(analyzer, cs, window, df_cleaning_summary, min_spike_p
                 fig_cluster = plt.figure(figsize=(12,8))
                 fig_cluster.suptitle(f'Unit {unit_id}')
                 ax_indx = 0
-                for group in np.unique(group_array):
-                    mask = group_array == group
-                    ax.scatter(principal_components[mask, 0],
-                                principal_components[mask, 1], 
-                                principal_components[mask, 2], 
+                for group in np.unique(results_dict['group_array']):
+                    mask = results_dict['group_array'] == group
+                    ax.scatter(results_dict['principal_components[mask, 0]'],
+                                results_dict['principal_components[mask, 1]'], 
+                                results_dict['principal_components[mask, 2]'], 
                                 label=f'Group {group}')
                     waveforms = analyzer.get_extension('waveforms').get_waveforms_one_unit(unit_id=unit_id, force_dense=True)
                     waveforms = get_highest_amplitude_channel(waveforms)
@@ -309,11 +316,6 @@ def split_noise_from_unit(analyzer, cs, window, df_cleaning_summary, min_spike_p
                 plt.close('all')
                 
                 del unit_id, unit_idx, principal_components, group_array, best_silhouette_score 
-            
-        else:
-            cs.remove_unit(unit_id=unit_id)
-            print(f'Unit {unit_idx}/{len(analyzer.unit_ids)}--> Unit removed for not enought spike')
-
 
     df_cleaning_summary = pd.concat(new_df_row_list)            
     clean_sorting = cs.sorting
