@@ -9,6 +9,7 @@ import traceback
 import os 
 import copy
 import json
+from time import sleep
 
 from GUIs.preprocessing_GUI import preprocessing_GUI
 from GUIs.sorter_params_GUI import sorter_param_GUI
@@ -18,6 +19,8 @@ from GUIs.trace_visualization_GUI import trace_visualization_GUI
 from GUIs.probe_visualization_GUI import probe_visualization_GUI
 from GUIs.sorting_summary_plot_GUI import sorting_summary_plot_GUI
 from GUIs.sorting_summary_plot_param_GUI import sorting_summary_plot_param_GUI
+from GUIs.probe_tool_GUI import probe_tool_GUI
+from GUIs.Custom_popup_GUI import Custom_popup_GUI
 from curation.manual_curation import manual_curation_event_handler
 from additional.toolbox import make_sorter_param_dict, ephy_extractor_dict, select_folder_file, LEDIndicator, SetLED, get_availabled_extension_extractor_converter_dict, get_default_param
 
@@ -32,8 +35,10 @@ class Main_GUI:
                                             'additional_recording_info_instance': additional_recording_info_GUI(),
                                             'trace_visualization_instance': trace_visualization_GUI(),
                                             'probe_visualization_instance': probe_visualization_GUI(),
+                                            'probe_tool_instance': probe_tool_GUI(),
                                             'sorting_summary_plot_instance': sorting_summary_plot_GUI(),
                                             'sorting_summary_plot_param_instance': sorting_summary_plot_param_GUI(),
+                                            'Custom_popup_instance': Custom_popup_GUI(),
                                             }
         
         self.sorter_param_dict = make_sorter_param_dict()
@@ -57,7 +62,9 @@ class Main_GUI:
         main_menu_layout = [['File', ['Load ephy folder', 
                                       #TODO 'Load multiple recording',
                                       'Load analysis', 'Export spike time', 'Export Template', 'Export to phy', 'Save settings', 'Load settings']], 
-                            # TODO ['Edit',['Probe tool', 'Import metadata', 'Ephy file tool']],
+                             ['Edit',['Create/Edit probe', 
+                                            #TODO 'Ephy file tool'
+                                            ]],
                             ['Parameters',['Preprocessing parameter', 'Sorter parameter', 'Unit auto cleaning parameter', 
                                            'Plotting parameter'
                                            ]],
@@ -326,7 +333,23 @@ class Main_GUI:
                             sg.popup_error('Please load a probe')
                         else:
                             self.additional_GUI_instance_dict['probe_visualization_instance'].create_window(probe=base_instance.probe, recording=base_instance.recording)
+                            
+                    elif event == 'Create/Edit probe': #TOSO buged
+                        if base_instance.probe is not None:
+                            self.additional_GUI_instance_dict['Custom_popup_instance'].create_window(text='A probe has already been loaded. Edit current probe, create a new one or cancel?', 
+                                                                                                     buttons=['Edit', 'Create', 'Cancel'], 
+                                                                                                     event='launch probe',
+                                                                                                     title='Create/Edit probe')
+                        else:
+                            self.window.write_event_value('launch probe', "create")
                     
+                    elif event == 'launch probe':
+                        if values['launch probe'] == 'create':
+                            self.additional_GUI_instance_dict['probe_tool_instance'].create_window(mode='create_base_probe')
+                        elif values['launch probe'] == 'edit':
+                            self.additional_GUI_instance_dict.probe = base_instance.probe
+                            self.additional_GUI_instance_dict['probe_tool_instance'].create_window(mode='edit_table_window')
+                            
                     elif event == 'Unit summary':
                         if base_instance.analyzer is None:
                             sg.popup_error('Sorting has not been done yet')

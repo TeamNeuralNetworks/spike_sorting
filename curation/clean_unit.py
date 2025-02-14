@@ -20,6 +20,7 @@ from tqdm import tqdm
 from sklearn.metrics import silhouette_score
 from sklearn.decomposition import PCA
 from scipy.cluster.hierarchy import linkage, fcluster
+# from scipy.cluster import HDBSCAN
 import pickle
 import shutil
 from time import sleep
