@@ -63,7 +63,7 @@ class probe_visualization_GUI:
         else:
             text_on_contact = None
             
-        _ = plot_probe(probe, ax=self.ax, text_on_contact=text_on_contact)
+        _ = plot_probe(probe, ax=self.ax, text_on_contact=text_on_contact, show_channel_on_click=True)
         
         self.fig.tight_layout()
         plt.ion()

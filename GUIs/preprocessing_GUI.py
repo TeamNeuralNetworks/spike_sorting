@@ -76,7 +76,10 @@ class preprocessing_GUI:
                     current_param_value = False
                 
                 if window_key[1] == 'dtype':
-                    current_param_value = availabled_dtype[current_param_value]
+                    if current_param_value is None:
+                        continue
+                    else:
+                        current_param_value = availabled_dtype[current_param_value]
                 else:
                     if not isinstance(current_param_value, bool) and current_param_value is not None:
                         try:

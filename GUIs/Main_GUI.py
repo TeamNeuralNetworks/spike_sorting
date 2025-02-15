@@ -334,20 +334,25 @@ class Main_GUI:
                         else:
                             self.additional_GUI_instance_dict['probe_visualization_instance'].create_window(probe=base_instance.probe, recording=base_instance.recording)
                             
-                    elif event == 'Create/Edit probe': #TOSO buged
+                    elif event == 'Create/Edit probe': #TODO buged
+                            
                         if base_instance.probe is not None:
-                            self.additional_GUI_instance_dict['Custom_popup_instance'].create_window(text='A probe has already been loaded. Edit current probe, create a new one or cancel?', 
+                            self.additional_GUI_instance_dict['Custom_popup_instance'].create_window(text='A probe has already been loaded.\nEdit current probe or create a new one?', 
                                                                                                      buttons=['Edit', 'Create', 'Cancel'], 
-                                                                                                     event='launch probe',
-                                                                                                     title='Create/Edit probe')
+                                                                                                     event='launch probe create/edit',
+                                                                                                     window_to_call=self.window,
+                                                                                                     title='launch probe create/edit')
                         else:
-                            self.window.write_event_value('launch probe', "create")
+                            self.window.write_event_value('launch probe create/edit', "Create")
                     
-                    elif event == 'launch probe':
-                        if values['launch probe'] == 'create':
+                    elif event == 'launch probe create/edit':
+                        if base_instance.recording is not None:
+                            self.additional_GUI_instance_dict['probe_tool_instance'].recording_channel_ids = base_instance.recording.channel_ids
+                            
+                        if values['launch probe create/edit'] == 'Create':
                             self.additional_GUI_instance_dict['probe_tool_instance'].create_window(mode='create_base_probe')
-                        elif values['launch probe'] == 'edit':
-                            self.additional_GUI_instance_dict.probe = base_instance.probe
+                        elif values['launch probe create/edit'] == 'Edit':
+                            self.additional_GUI_instance_dict['probe_tool_instance'].probe = base_instance.probe
                             self.additional_GUI_instance_dict['probe_tool_instance'].create_window(mode='edit_table_window')
                             
                     elif event == 'Unit summary':

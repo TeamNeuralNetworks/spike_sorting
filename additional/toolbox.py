@@ -32,6 +32,11 @@ ephy_extractor_dict = {'file': {
 availabled_dtype = {'float64': np.float64, 
                     'int16': np.int16, 
                     'int32': np.int32}
+def count_decimals(num):
+    num_str = str(num)
+    if '.' in num_str:
+        return len(num_str.split('.')[1])
+    return 0  # No decimals if there's no dot
 
 def get_availabled_extension_extractor_converter_dict(mode):
     extension_extractor_converter_dict = {}

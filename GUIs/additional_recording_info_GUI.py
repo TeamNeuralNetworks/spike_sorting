@@ -57,7 +57,7 @@ class additional_recording_info_GUI:
             [sg.Checkbox('', k='multi_recording_loading', default=multi_recording_loading, visible=False)]
             ]
         
-        self.window = sg.Window('Additional recording info needed', layout, finalize=True)
+        self.window = sg.Window('Additional recording info needed', layout, finalize=True, modal=True)
 
 
     def save_parameters(self):
