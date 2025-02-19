@@ -73,7 +73,7 @@ def manual_curation_module(base_instance, save_path):
                         with open(f"{save_path}/sortingview_curation_dict_temp_.json", "w") as outfile: 
                             json.dump(sortingview_curation_dict, outfile)
                         
-                        analyzer_manualy_curated = apply_sortingview_curation(base_instance.analyzer, 
+                        analyzer_manualy_curated = apply_sortingview_curation(base_instance.analyzer, #TODO this is not working for some reason
                                                                             uri_or_json=f"{save_path}/sortingview_curation_dict_temp_.json",
                                                                             include_labels=['accept'])
                         
@@ -124,7 +124,7 @@ def manual_curation_module(base_instance, save_path):
                         shutil.rmtree(f"{save_path}/SortingAnalyzer" )
                     except PermissionError:
                         base_instance.Main_GUI_instance.window.write_event_value('popup_error', "")
-                        response = sg.popup_yes_no("Unable top save curated sorting analyzer.\nWould you like to try again or continue with sorting analyzer in memory only?")
+                        response = popup_yes_no("Unable top save curated sorting analyzer.\nWould you like to try again or continue with sorting analyzer in memory only?")
                         if response == 'Yes':
                             continue
                         else:
@@ -155,7 +155,7 @@ def manual_curation_module(base_instance, save_path):
         if base_instance.pipeline_parameters['summary_plot_param']['auto_save']['activate']:
             print('Sorting Summary plot in progress')
             plot_sorting_summary(base_instance.analyzer, 
-                                  sorter_name, 
+                                  base_instance.pipeline_parameters['nale'], 
                                   save_path=save_path, 
                                   summary_plot_param=base_instance.pipeline_parameters['summary_plot_param'],)
         print('')

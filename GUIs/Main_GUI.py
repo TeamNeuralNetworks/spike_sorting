@@ -226,7 +226,10 @@ class Main_GUI:
                         
                         elif event == 'Load_recording':
                             self.additional_GUI_instance_dict['Custom_popup_instance'].create_window(text='Select loading method', 
-                                                                                                            buttons=['Load ephy file', 'Load ephy folder', 'Load all file in a folder'], 
+                                                                                                            buttons=['Load ephy file', 
+                                                                                                                     'Load ephy folder', 
+                                                                                                                     #'Load all file in a folder'#TODO not implemented yet 'Load all file in a folder'
+                                                                                                                     ], 
                                                                                                             event='load_recordings_answer',
                                                                                                             window_to_call=self.window,
                                                                                                             title='Load recording')
@@ -248,8 +251,7 @@ class Main_GUI:
                             elif 'Load_ephy_folder' in event:
                                 path = select_folder_file(mode='folder')
                             elif event == 'Load_multi_ephy_file':
-                                sg.popup_error('Not yet implemanted')
-                                path = None
+                                path = select_folder_file(mode='folder')
                                 
                             if path is not None:
                                 base_instance.pipeline_parameters['load_ephy']['trigger_from'] = values[event]
@@ -257,31 +259,61 @@ class Main_GUI:
                                 if event == 'Load_ephy_folder':
                                     base_instance.pipeline_parameters['load_ephy']['mode'] = 'folder'
                                     base_instance.pipeline_parameters['load_ephy']['extension'] = 'folder'
+                                    self.window.write_event_value('launch_recording_loading', "")
                                 elif event == 'Load_ephy_file':
                                     base_instance.pipeline_parameters['load_ephy']['mode'] = 'file'
-                                    base_instance.pipeline_parameters['load_ephy']['extension'] = path.split('.')[-1] 
+                                    base_instance.pipeline_parameters['load_ephy']['extension'] = path.split('.')[-1]
+                                    self.window.write_event_value('launch_recording_loading', "")
                                 elif event == 'Load_multi_ephy_file':
                                     base_instance.pipeline_parameters['load_ephy']['mode'] = 'multi_file'
-                                    #TODO finish that
-                                
+                                    files = [f for f in os.listdir(path) if os.path.isfile(os.path.join(path, f))]
+
+                                    extention_list = []
+                                    for file in files:
+                                        extension = file.split('.')[-1]
+                                        extention_list.append(extension)
+                                    extention_list = sorted(list(set(extention_list)))
+                                    
+                                    if len(extention_list) > 1:
+                                        self.additional_GUI_instance_dict['Custom_popup_instance'].create_window(text='Multiple file type detected, which one to load?', 
+                                                                                                                 buttons=extention_list, 
+                                                                                                                 event='Multi_file_loading_chose_extention',
+                                                                                                                 window_to_call=self.window,
+                                                                                                                 title='Multi file loading, chose extention')
+                                    else:
+                                        base_instance.pipeline_parameters['load_ephy']['extension'] = extention_list[0]
+                                        path = [f'{path}/{file}' for file in files]
+                                        self.window.write_event_value('launch_recording_loading', "")
+                        
+                        elif event == 'launch_recording_loading':
+
                                 extension_extractor_converter_dict = get_availabled_extension_extractor_converter_dict(mode=base_instance.pipeline_parameters['load_ephy']['mode'])
                                 if base_instance.pipeline_parameters['load_ephy']['extension'] in extension_extractor_converter_dict.keys() and len(ephy_extractor_dict[base_instance.pipeline_parameters['load_ephy']['mode']][extension_extractor_converter_dict[base_instance.pipeline_parameters['load_ephy']['extension']]]['args']) == 0:
                                     base_instance.pipeline_parameters['load_ephy']['extractor'] = extension_extractor_converter_dict[base_instance.pipeline_parameters['load_ephy']['extension']]
                                     path_syntax = ephy_extractor_dict[base_instance.pipeline_parameters['load_ephy']['mode']][base_instance.pipeline_parameters['load_ephy']['extractor']]['path_syntax']
-                                    base_instance.pipeline_parameters['load_ephy']['extractor_parameters'][path_syntax] = path
+                                    
+                                    if base_instance.pipeline_parameters['load_ephy']['mode'] == 'multi_file':
+                                        extractor_parameters_list = []
+                                        for current_path in path:
+                                            current_extractor_parameters = copy.deepcopy(base_instance.pipeline_parameters['load_ephy']['extractor_parameters'])
+                                            current_extractor_parameters[path_syntax] = current_path
+                                            extractor_parameters_list.append(current_extractor_parameters)
+                                        base_instance.pipeline_parameters['load_ephy']['extractor_parameters'] = extractor_parameters_list
+                                    else:
+                                        base_instance.pipeline_parameters['load_ephy']['extractor_parameters'][path_syntax] = path
                                     base_instance.state = "load_recording"
                                 else:
                                     self.additional_GUI_instance_dict['additional_recording_info_instance'].path = path
                                     self.additional_GUI_instance_dict['additional_recording_info_instance'].create_window(mode=base_instance.pipeline_parameters['load_ephy']['mode'],)
 
-                                
-                        # elif event == 'Load multiple recording':#TODO
-                        #     multi_file_path = sg.popup_get_file('Select excel file containing ephy_file_path, probe_file_path, output_folder_path (each row is a different recording)')   
-                        #     if multi_file_path is not None:
-                        #         base_instance.pipeline_parameters['load_ephy']['ephy_file_path'] = multi_file_path
-                        #         self.additional_GUI_instance_dict['additional_recording_info_instance'].create_window(multi_recording_loading=True)
-                        #         base_instance.pipeline_parameters['from_loading'] = True
-                        #         base_instance.state = "load_multi_recording"
+                            
+                        elif event == 'Multi_file_loading_chose_extention':
+                            
+                            extension = values[event]
+                            file_to_keep = [file for file in files if file.split('.')[-1] == extension]
+                            base_instance.pipeline_parameters['load_ephy']['extension'] = extension
+                            path = [f'{path}/{file}' for file in file_to_keep]
+                            self.window.write_event_value('launch_recording_loading', "")
                                 
                         elif event == 'Select_output_folder':
                             path = select_folder_file(mode='folder')

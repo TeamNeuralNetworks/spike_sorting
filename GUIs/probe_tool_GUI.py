@@ -158,7 +158,7 @@ class probe_tool_GUI:
         
         if self.probe.contact_ids is not None:
             text_on_contact = self.probe.contact_ids
-        elif self.recording_channel_ids is not None:
+        elif self.recording_channel_ids is not None and self.probe.device_channel_indices is not None:
             text_on_contact = [None]*len(self.recording_channel_ids)
             for indx, device_channel_indice in enumerate(self.probe.device_channel_indices):
                 text_on_contact[indx] = self.recording_channel_ids[device_channel_indice]

@@ -29,6 +29,8 @@ ephy_extractor_dict = {'file': {
                                   }
                        }
 
+ephy_extractor_dict['multi_file'] = ephy_extractor_dict['file']
+
 availabled_dtype = {'float16': np.float16, 
                     'float32': np.float32, 
                     'float64': np.float64,                     
@@ -54,10 +56,7 @@ def get_availabled_extension_extractor_converter_dict(mode):
     return extension_extractor_converter_dict
 
 def get_availabled_extractor(mode):
-    if mode == 'file':
-        return list(ephy_extractor_dict['file'].keys())
-    elif mode == 'folder':
-        return list(ephy_extractor_dict['folder'].keys())
+    return list(ephy_extractor_dict[mode].keys())
     
 def led_loading_animation(window, base_instance):
     while base_instance.state is not None:

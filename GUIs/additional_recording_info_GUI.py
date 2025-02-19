@@ -7,6 +7,7 @@ Created on Thu May 23 10:59:34 2024
 
 import numpy as np
 import PySimpleGUI as sg
+import copy
 
 from additional.toolbox import get_availabled_extractor, ephy_extractor_dict, availabled_dtype
 
@@ -44,6 +45,7 @@ class additional_recording_info_GUI:
     
     def create_window(self, mode, multi_recording_loading=False):
         self.mode = mode
+
         available_extractor = get_availabled_extractor(mode=self.mode)
         self.extractor = available_extractor[0]
         
@@ -102,12 +104,18 @@ class additional_recording_info_GUI:
             if save_changes_answer == 'Yes':
                 base_instance.pipeline_parameters['load_ephy']['extractor_parameters'] = self.save_parameters()
                 base_instance.pipeline_parameters['load_ephy']['extractor'] = self.extractor
-                if values['multi_recording_loading']:
-                    base_instance.state = "load_multi_recording"
+                path_syntax = ephy_extractor_dict[base_instance.pipeline_parameters['load_ephy']['mode']][base_instance.pipeline_parameters['load_ephy']['extractor']]['path_syntax']
+                
+                if self.mode == 'multi_file':
+                    extractor_parameters_list = []
+                    for current_path in self.path:
+                        current_extractor_parameters = copy.deepcopy(base_instance.pipeline_parameters['load_ephy']['extractor_parameters'])
+                        current_extractor_parameters[path_syntax] = current_path
+                        extractor_parameters_list.append(current_extractor_parameters)
+                    base_instance.pipeline_parameters['load_ephy']['extractor_parameters'] = extractor_parameters_list
                 else:
-                    base_instance.state = "load_recording"
-                    path_syntax = ephy_extractor_dict[base_instance.pipeline_parameters['load_ephy']['mode']][base_instance.pipeline_parameters['load_ephy']['extractor']]['path_syntax']
                     base_instance.pipeline_parameters['load_ephy']['extractor_parameters'][path_syntax] = self.path
+                base_instance.state = "load_recording"
             else:
                 base_instance.pipeline_parameters['load_ephy']['extractor'] = None
                 path_syntax = ephy_extractor_dict[base_instance.pipeline_parameters['load_ephy']['mode']][base_instance.pipeline_parameters['load_ephy']['extractor']]['path_syntax']
@@ -119,12 +127,20 @@ class additional_recording_info_GUI:
         if event == 'save_ephy_param':
             base_instance.pipeline_parameters['load_ephy']['extractor_parameters'] = self.save_parameters()
             base_instance.pipeline_parameters['load_ephy']['extractor'] = self.extractor
-            if values['multi_recording_loading']:
-                base_instance.state = "load_multi_recording"
+            path_syntax = ephy_extractor_dict[base_instance.pipeline_parameters['load_ephy']['mode']][base_instance.pipeline_parameters['load_ephy']['extractor']]['path_syntax']
+            if self.mode == 'multi_file':
+                extractor_parameters_list = []
+                for current_path in self.path:
+                    current_extractor_parameters = copy.deepcopy(base_instance.pipeline_parameters['load_ephy']['extractor_parameters'])
+                    current_extractor_parameters[path_syntax] = current_path
+                    extractor_parameters_list.append(current_extractor_parameters)
+                base_instance.pipeline_parameters['load_ephy']['extractor_parameters'] = extractor_parameters_list
             else:
-                base_instance.state = "load_recording"
-                path_syntax = ephy_extractor_dict[base_instance.pipeline_parameters['load_ephy']['mode']][base_instance.pipeline_parameters['load_ephy']['extractor']]['path_syntax']
                 base_instance.pipeline_parameters['load_ephy']['extractor_parameters'][path_syntax] = self.path
+            base_instance.state = "load_recording"
+            
+            
+            
             self.window.close()
             self.window = None
             

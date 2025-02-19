@@ -237,13 +237,28 @@ class Spike_sorting_MAIN:
 
     def load_recording(self):
 
-        try:
-            self.recording = ephy_extractor_dict[self.pipeline_parameters['load_ephy']['mode']][self.pipeline_parameters['load_ephy']['extractor']]['function'](self.pipeline_parameters['load_ephy']['extractor_parameters'])
-        except Exception:
-            print('\n') 
-            traceback.print_exc()
-            self.Main_GUI_instance.window.write_event_value('popup_error', "unable to load ephy data")
-            return 
+        if self.pipeline_parameters['load_ephy']['mode'] == 'multi_file':
+            self.recording = []
+            for extractor_parameters in self.pipeline_parameters['load_ephy']['extractor_parameters']:
+                try:
+                    self.recording.append(ephy_extractor_dict['file'][self.pipeline_parameters['load_ephy']['extractor']]['function'](extractor_parameters))
+                except Exception:
+                    print('\n') 
+                    traceback.print_exc()
+                    self.Main_GUI_instance.window.write_event_value('popup_error', "unable to load ephy data")
+            if len(self.recording) == 0:
+                self.recording = None
+                self.Main_GUI_instance.window.write_event_value('popup_error', "Unable to load any recordings")
+                return
+        else:
+            
+            try:
+                self.recording = ephy_extractor_dict[self.pipeline_parameters['load_ephy']['mode']][self.pipeline_parameters['load_ephy']['extractor']]['function'](self.pipeline_parameters['load_ephy']['extractor_parameters'])
+            except Exception:
+                print('\n') 
+                traceback.print_exc()
+                self.Main_GUI_instance.window.write_event_value('popup_error', "unable to load ephy data")
+                return 
         
         if self.pipeline_parameters['load_ephy']['trigger_from'] == 'Recording_tool_GUI':
             self.Main_GUI_instance.additional_GUI_instance_dict['Recording_tool_instance'].window['main_window'].write_event_value('recording_loaded', "trigger from main")

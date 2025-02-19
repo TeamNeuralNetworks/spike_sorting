@@ -39,8 +39,7 @@ class Recording_tool_GUI:
         self.time_slider_range = (None, None)
         self.time_window_size = None
         
-        self.recording_file_df = pd.DataFrame({'Recording file path': [],
-                                               'Name': [],
+        self.recording_file_df = pd.DataFrame({'Name': [],
                                                 'Recording lenght': [],
                                                 'Number of channel': [],
                                                 'dtype': [],
@@ -98,19 +97,16 @@ class Recording_tool_GUI:
         self.fig, self.ax = plt.subplots(figsize=(9, 7))
         self.create_figure(self.recording_list[self.selected_recording_index].channel_ids, self.recording_list[self.selected_recording_index])
             
-    def add_recording(self, base_instance):
-        self.recording_list.append(base_instance.recording)
+    def add_recording(self, load_ephy_param, recording, recording_path):
+        self.recording_list.append(recording)
         self.selected_recording_index = len(self.recording_list)-1
-        path_syntax = ephy_extractor_dict[base_instance.pipeline_parameters['load_ephy']['mode']][base_instance.pipeline_parameters['load_ephy']['extractor']]['path_syntax']
-        recording_path = f"{base_instance.pipeline_parameters['load_ephy']['extractor_parameters'][path_syntax]}"
         self.recording_file_df  = pd.concat([self.recording_file_df ,
-                                        pd.DataFrame({'Recording file path': [recording_path],
-                                                      'Name': [Path(recording_path).name],
+                                        pd.DataFrame({'Name': [Path(recording_path).name],
                                                      'Recording lenght': [self.recording_list[self.selected_recording_index].get_total_duration()],
                                                      'Number of channel': [self.recording_list[self.selected_recording_index].get_num_channels()],
                                                      'dtype': [self.recording_list[self.selected_recording_index].dtype],
                                                      'sampling frequency': [self.recording_list[self.selected_recording_index].get_sampling_frequency()],
-                                                     'File format': [base_instance.pipeline_parameters['load_ephy']['extractor']],
+                                                     'File format': [load_ephy_param['extractor']],
                                                      })
                                         ])
         
@@ -124,7 +120,7 @@ class Recording_tool_GUI:
         # Layout
         layout = [
             [sg.Column([[sg.Table(values=self.recording_file_df.values.tolist(), headings=list(self.recording_file_df.columns), 
-                      auto_size_columns=True, justification='center', num_rows=44, display_row_numbers=False, 
+                      auto_size_columns=True, justification='center', num_rows=44, display_row_numbers=True, 
                       key='recording_file_table', enable_cell_editing=True, enable_click_events=True,
                       tooltip='contact_ids refere to the name of this channel in your recording (probably set by the amplifier)\ndevice_channel_indices refere the indice of this electrode on the recording (indice 0 is the first trace of the recording)')],
                      [sg.Button("load recording", k= 'load_recording'),
@@ -151,7 +147,9 @@ class Recording_tool_GUI:
         if base_instance is not None:
             self.base_instance_pipeline_parameters_load_ephy = base_instance.pipeline_parameters['load_ephy']
             if base_instance.recording is not None:
-                self.add_recording(base_instance)
+                path_syntax = ephy_extractor_dict[base_instance.pipeline_parameters['load_ephy']['mode']][base_instance.pipeline_parameters['load_ephy']['extractor']]['path_syntax']
+                recording_path = f"{base_instance.pipeline_parameters['load_ephy']['extractor_parameters'][path_syntax]}"
+                self.add_recording(base_instance.pipeline_parameters['load_ephy'], base_instance.recording, recording_path)
         
         if self.recording_list:
             self.generate_trace_visualization_window()
@@ -283,6 +281,12 @@ class Recording_tool_GUI:
                     base_instance.pipeline_parameters['load_ephy'] = default_ephy_param
                     base_instance.recording = self.recording_list[self.selected_recording_index]
                     base_instance.Main_GUI_instance.window['Load_recording'].update(button_color='green')
+                else:
+                    default_ephy_param = get_default_param()["load_ephy"]
+                    default_ephy_param['mode'] = None
+                    base_instance.pipeline_parameters['load_ephy'] = default_ephy_param
+                    base_instance.recording = None
+                    base_instance.Main_GUI_instance.window['Load_recording'].update(button_color='red')
                 
                 self.window['main_window'].close()
                 self.window['main_window'] = None
@@ -316,14 +320,13 @@ class Recording_tool_GUI:
             self.recording_list = [concatenate_recordings(self.recording_list)]
             self.selected_recording_index = 0
             recording_path = 'Concatenated recording'
-            self.recording_file_df  = pd.DataFrame({'Recording file path': [recording_path],
-                                                         'Name': [Path(recording_path).name],
-                                                        'Recording lenght': [self.recording_list[self.selected_recording_index].get_total_duration()],
-                                                        'Number of channel': [self.recording_list[self.selected_recording_index].get_num_channels()],
-                                                        'dtype': [self.recording_list[self.selected_recording_index].dtype],
-                                                        'sampling frequency': [self.recording_list[self.selected_recording_index].get_sampling_frequency()],
-                                                        'File format': [base_instance.pipeline_parameters['load_ephy']['extractor']],
-                                                        })
+            self.recording_file_df  = pd.DataFrame({'Name': [Path(recording_path).name],
+                                                    'Recording lenght': [self.recording_list[self.selected_recording_index].get_total_duration()],
+                                                    'Number of channel': [self.recording_list[self.selected_recording_index].get_num_channels()],
+                                                    'dtype': [self.recording_list[self.selected_recording_index].dtype],
+                                                    'sampling frequency': [self.recording_list[self.selected_recording_index].get_sampling_frequency()],
+                                                    'File format': [base_instance.pipeline_parameters['load_ephy']['extractor']],
+                                                    })
             
             self.window['main_window']['recording_file_table'].update(values=self.recording_file_df.values.tolist())
             self.window['main_window']['recording_file_table'].update(select_rows=[self.selected_recording_index])
@@ -338,8 +341,16 @@ class Recording_tool_GUI:
                 base_instance.Main_GUI_instance.window.write_event_value('Load_multi_ephy_file', "Recording_tool_GUI")
         
         elif event == 'recording_loaded':
-            self.add_recording(base_instance)
+            path_syntax = ephy_extractor_dict[base_instance.pipeline_parameters['load_ephy']['mode']][base_instance.pipeline_parameters['load_ephy']['extractor']]['path_syntax']
+            if isinstance(base_instance.recording, list):
+                for recording_indx, recording in enumerate(base_instance.recording):
+                    recording_path = f"{base_instance.pipeline_parameters['load_ephy']['extractor_parameters'][recording_indx][path_syntax]}"
+                    self.add_recording(base_instance.pipeline_parameters['load_ephy'], recording, recording_path)
+            else:
+                recording_path = f"{base_instance.pipeline_parameters['load_ephy']['extractor_parameters'][path_syntax]}"
+                self.add_recording(base_instance.pipeline_parameters['load_ephy'], base_instance.recording, recording_path)
             self.generate_trace_visualization_window()
+            base_instance.recording = None
         
         elif event == 'delete_recording':
             del self.recording_list[self.selected_recording_index]
@@ -419,6 +430,7 @@ class Recording_tool_GUI:
                     if self.window['window_trace'] is not None:
                         self.window['window_trace'].close()
                         self.window['window_trace'] = None
+                        
             
         elif '+CLICKED+' in event:
             if event[2][0] is not None:
