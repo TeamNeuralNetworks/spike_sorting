@@ -20,6 +20,7 @@ from GUIs.probe_visualization_GUI import probe_visualization_GUI
 from GUIs.sorting_summary_plot_GUI import sorting_summary_plot_GUI
 from GUIs.sorting_summary_plot_param_GUI import sorting_summary_plot_param_GUI
 from GUIs.probe_tool_GUI import probe_tool_GUI
+from GUIs.Recording_tool_GUI import Recording_tool_GUI
 from GUIs.Custom_popup_GUI import Custom_popup_GUI
 from curation.manual_curation import manual_curation_event_handler
 from additional.toolbox import make_sorter_param_dict, ephy_extractor_dict, select_folder_file, LEDIndicator, SetLED, get_availabled_extension_extractor_converter_dict, get_default_param
@@ -38,6 +39,7 @@ class Main_GUI:
                                             'probe_tool_instance': probe_tool_GUI(),
                                             'sorting_summary_plot_instance': sorting_summary_plot_GUI(),
                                             'sorting_summary_plot_param_instance': sorting_summary_plot_param_GUI(),
+                                            'Recording_tool_instance': Recording_tool_GUI(),
                                             'Custom_popup_instance': Custom_popup_GUI(),
                                             }
         
@@ -59,24 +61,33 @@ class Main_GUI:
         
         sg.theme('DarkBlue')
         
-        main_menu_layout = [['File', ['Load ephy folder', 
-                                      #TODO 'Load multiple recording',
-                                      'Load analysis', 'Export spike time', 'Export Template', 'Export to phy', 'Save settings', 'Load settings']], 
-                             ['Edit',['Create/Edit probe', 
-                                            #TODO 'Ephy file tool'
-                                            ]],
-                            ['Parameters',['Preprocessing parameter', 'Sorter parameter', 'Unit auto cleaning parameter', 
+        main_menu_layout = [['File', ['Load analysis', 
+                                      'Export spike time', 
+                                      'Export Template',
+                                      'Export to phy', 
+                                      'Save settings', 
+                                      'Load settings']], 
+                            
+                             ['Edit',['Create probe', 
+                                      'Edit recording'
+                                      ]],
+                             
+                            ['Parameters',['Preprocessing parameter', 
+                                           'Sorter parameter', 
+                                           'Unit auto cleaning parameter', 
                                            'Plotting parameter'
                                            ]],
-                            ['Visualize',['Traces', 'Probe', 
+                            
+                            ['Visualize',['Traces', 
+                                          'Probe', 
                                           'Unit summary'
                                           ]],
                             ]
         
         if pipeline_parameters['load_ephy']['mode'] is None:
-            ephy_file_button = sg.B("Load ephy file", k="Load_ephy_file", button_color='red', enable_events=True)
+            ephy_file_button = sg.B("Load recording", k="Load_recording", button_color='red', enable_events=True)
         else:
-            ephy_file_button = sg.B("Load ephy file", k="Load_ephy_file", button_color='green', enable_events=True)
+            ephy_file_button = sg.B("Load recording", k="Load_recording", button_color='green', enable_events=True)
         
         if pipeline_parameters['probe_file_path'] is None:
             probe_file_button = sg.B("Load probe file", k="Load_probe_file", button_color='red', enable_events=True)
@@ -144,8 +155,11 @@ class Main_GUI:
                 window, event, values = sg.read_all_windows()
                  
                 for additional_GUI_key, additional_GUI_instance in self.additional_GUI_instance_dict.items():
-                    
-                    if window == additional_GUI_instance.window:
+                    if isinstance(additional_GUI_instance.window, dict) and window in additional_GUI_instance.window.values(): #Some GUI have multiple window
+                        additional_GUI_instance.event_handler(window, values, event, base_instance)
+                        break
+                
+                    elif window == additional_GUI_instance.window:
                         additional_GUI_instance.event_handler(values, event, base_instance)
                         break
                 
@@ -157,7 +171,13 @@ class Main_GUI:
                     if event == sg.WIN_CLOSED:
                         
                         for additional_GUI_key, additional_GUI_instance in self.additional_GUI_instance_dict.items():
-                            if additional_GUI_instance.window is not None:
+                            if isinstance(additional_GUI_instance.window, dict):
+                                for current_additional_GUI_instance_window in additional_GUI_instance.window.values():
+                                    if current_additional_GUI_instance_window is not None:
+                                        current_additional_GUI_instance_window.close()
+                                        current_additional_GUI_instance_window = None
+                                        
+                            elif additional_GUI_instance.window is not None:
                                 additional_GUI_instance.window.close()
                                 additional_GUI_instance.window = None
                             
@@ -165,7 +185,7 @@ class Main_GUI:
                         window.close()
                         break
                     
-                    if base_instance.state is not None and event in ['Load analysis', 'Load_ephy_file', 'Load multiple recording', 'Load_probe_file', 'Select_output_folder']:
+                    if base_instance.state is not None and event in ['Load analysis', 'Load_recording', 'Load multiple recording', 'Load_probe_file', 'Select_output_folder']:
                         sg.popup_error('Parameters can not be changed while a analysis is in progress')
                         
                     elif event == 'preprocessing_checkbox' and (base_instance.state == 'preprocessing' or base_instance.pipeline_parameters['preprocessing'] == 'Done'):
@@ -204,21 +224,44 @@ class Main_GUI:
                                     self.window['Load_probe_file'].update(button_color='green')
                                     base_instance.state = 'load_probe'
                         
-                        elif event == 'Load_ephy_file' or event == 'Load ephy folder':
+                        elif event == 'Load_recording':
+                            self.additional_GUI_instance_dict['Custom_popup_instance'].create_window(text='Select loading method', 
+                                                                                                            buttons=['Load ephy file', 'Load ephy folder', 'Load all file in a folder'], 
+                                                                                                            event='load_recordings_answer',
+                                                                                                            window_to_call=self.window,
+                                                                                                            title='Load recording')
+                        
+                        elif event == 'load_recordings_answer':
+                            if values[event] == 'Load ephy file':
+                                self.window.write_event_value('Load_ephy_file', "Main_GUI")
+                            elif values[event] == 'Load ephy folder':
+                                self.window.write_event_value('Load_ephy_folder', "Main_GUI")
+                            elif values[event] == 'Load all file in a folder':
+                                sg.popup_error('Not yet implemented')
+                                
+                        elif event == 'Load_ephy_file'  or event == 'Load_ephy_folder' or event == 'Load_multi_ephy_file':
                             default_param = get_default_param()
                             base_instance.pipeline_parameters['load_ephy']['extractor_parameters'] = default_param['load_ephy']['extractor_parameters']
-                            if event == 'Load_ephy_file':
+                            
+                            if 'Load_ephy_file' in event:
                                 path = select_folder_file(mode='file')
-                            else:
-                                base_instance.pipeline_parameters['load_ephy']['mode'] = 'folder'
+                            elif 'Load_ephy_folder' in event:
                                 path = select_folder_file(mode='folder')
+                            elif event == 'Load_multi_ephy_file':
+                                path = select_folder_file(mode='folder')
+                                
                             if path is not None:
-                                if event == 'Load ephy folder':
+                                base_instance.pipeline_parameters['load_ephy']['trigger_from'] = values[event]
+                                
+                                if event == 'Load_ephy_folder':
                                     base_instance.pipeline_parameters['load_ephy']['mode'] = 'folder'
                                     base_instance.pipeline_parameters['load_ephy']['extension'] = 'folder'
-                                else:
+                                elif event == 'Load_ephy_file':
                                     base_instance.pipeline_parameters['load_ephy']['mode'] = 'file'
                                     base_instance.pipeline_parameters['load_ephy']['extension'] = path.split('.')[-1] 
+                                elif event == 'Load_multi_ephy_file':
+                                    base_instance.pipeline_parameters['load_ephy']['mode'] = 'multi_file'
+                                    #TODO finish that
                                 
                                 extension_extractor_converter_dict = get_availabled_extension_extractor_converter_dict(mode=base_instance.pipeline_parameters['load_ephy']['mode'])
                                 if base_instance.pipeline_parameters['load_ephy']['extension'] in extension_extractor_converter_dict.keys() and len(ephy_extractor_dict[base_instance.pipeline_parameters['load_ephy']['mode']][extension_extractor_converter_dict[base_instance.pipeline_parameters['load_ephy']['extension']]]['args']) == 0:
@@ -228,12 +271,8 @@ class Main_GUI:
                                     base_instance.state = "load_recording"
                                 else:
                                     self.additional_GUI_instance_dict['additional_recording_info_instance'].path = path
-                                    self.additional_GUI_instance_dict['additional_recording_info_instance'].create_window(mode=base_instance.pipeline_parameters['load_ephy']['mode'])
-                                    
-                                    if event == 'Load ephy folder' and os.path.isfile(f"{path}/probe.json"):
-                                        base_instance.pipeline_parameters['probe_file_path'] = f"{path}/probe.json"
-                                        base_instance.load_probe()
-    
+                                    self.additional_GUI_instance_dict['additional_recording_info_instance'].create_window(mode=base_instance.pipeline_parameters['load_ephy']['mode'],)
+
                                 
                         # elif event == 'Load multiple recording':#TODO
                         #     multi_file_path = sg.popup_get_file('Select excel file containing ephy_file_path, probe_file_path, output_folder_path (each row is a different recording)')   
@@ -326,35 +365,43 @@ class Main_GUI:
                         if base_instance.recording is None:
                             sg.popup_error('Please load a recording')
                         else:
-                            self.additional_GUI_instance_dict['trace_visualization_instance'].create_window(base_instance=base_instance)
-                
-                    elif event == 'Probe':
-                        if base_instance.probe is None:
-                            sg.popup_error('Please load a probe')
-                        else:
-                            self.additional_GUI_instance_dict['probe_visualization_instance'].create_window(probe=base_instance.probe, recording=base_instance.recording)
-                            
-                    elif event == 'Create/Edit probe': #TODO buged
+                            self.additional_GUI_instance_dict['trace_visualization_instance'].create_window(recording=base_instance.recording)
+                    
+                    elif event == 'Create probe': #TODO buged
                             
                         if base_instance.probe is not None:
                             self.additional_GUI_instance_dict['Custom_popup_instance'].create_window(text='A probe has already been loaded.\nEdit current probe or create a new one?', 
                                                                                                      buttons=['Edit', 'Create', 'Cancel'], 
-                                                                                                     event='launch probe create/edit',
+                                                                                                     event='launch probe creation',
                                                                                                      window_to_call=self.window,
-                                                                                                     title='launch probe create/edit')
+                                                                                                     title='launch probe creation')
                         else:
-                            self.window.write_event_value('launch probe create/edit', "Create")
+                            self.window.write_event_value('launch probe creation', "Create")
                     
-                    elif event == 'launch probe create/edit':
+                    elif event == 'launch probe creation':
                         if base_instance.recording is not None:
                             self.additional_GUI_instance_dict['probe_tool_instance'].recording_channel_ids = base_instance.recording.channel_ids
                             
-                        if values['launch probe create/edit'] == 'Create':
+                        if values[event] == 'Create':
                             self.additional_GUI_instance_dict['probe_tool_instance'].create_window(mode='create_base_probe')
-                        elif values['launch probe create/edit'] == 'Edit':
+                        elif values[event] == 'Edit':
+                            self.additional_GUI_instance_dict['probe_tool_instance'].probe = base_instance.probe
+                            self.additional_GUI_instance_dict['probe_tool_instance'].create_window(mode='edit_table_window')
+                    
+                    elif event == 'Probe':
+                        if base_instance.probe is None:
+                            sg.popup_error('Please load a probe')
+                        else:
+                            if base_instance.recording is not None:
+                                self.additional_GUI_instance_dict['probe_tool_instance'].recording_channel_ids = base_instance.recording.channel_ids
+                                
                             self.additional_GUI_instance_dict['probe_tool_instance'].probe = base_instance.probe
                             self.additional_GUI_instance_dict['probe_tool_instance'].create_window(mode='edit_table_window')
                             
+                    
+                    elif event == 'Edit recording':
+                        self.additional_GUI_instance_dict['Recording_tool_instance'].create_window(base_instance=base_instance)
+                        
                     elif event == 'Unit summary':
                         if base_instance.analyzer is None:
                             sg.popup_error('Sorting has not been done yet')
@@ -395,7 +442,7 @@ class Main_GUI:
                             self.window['sorter_combo'].update(base_instance.pipeline_parameters['name'])
                     
                     elif event == 'popup_error':
-                        sg.popup_error(values['popup_error'])
+                        sg.popup_error(values[event])
                         
             except Exception:
                 print('\n')

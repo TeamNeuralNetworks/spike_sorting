@@ -69,6 +69,7 @@ class additional_recording_info_GUI:
             else:
                 if window_key[0] == self.extractor:
                     current_param_value = self.window[window_key].get()
+                    
                     if current_param_value == 'None' or current_param_value == '':
                         current_param_value = None
                     elif current_param_value == 'True':
@@ -91,7 +92,8 @@ class additional_recording_info_GUI:
                             except ValueError:
                                 pass
                     
-                        new_load_ephy_param[window_key[1]] = current_param_value
+                    new_load_ephy_param[window_key[1]] = current_param_value
+                    
         return new_load_ephy_param
     
     def event_handler(self, values, event, base_instance):
@@ -127,9 +129,6 @@ class additional_recording_info_GUI:
             self.window = None
             
         elif event == 'cancel_ephy_param':
-            base_instance.pipeline_parameters['load_ephy']['extractor'] = None
-            path_syntax = ephy_extractor_dict[base_instance.pipeline_parameters['load_ephy']['mode']][base_instance.pipeline_parameters['load_ephy']['extractor']]['path_syntax']
-            base_instance.pipeline_parameters['load_ephy']['extractor_parameters'][path_syntax] = None
             self.window.close()
             self.window = None
         

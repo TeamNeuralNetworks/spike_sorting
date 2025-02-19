@@ -29,9 +29,17 @@ ephy_extractor_dict = {'file': {
                                   }
                        }
 
-availabled_dtype = {'float64': np.float64, 
+availabled_dtype = {'float16': np.float16, 
+                    'float32': np.float32, 
+                    'float64': np.float64,                     
                     'int16': np.int16, 
-                    'int32': np.int32}
+                    'int32': np.int32,
+                    'int64': np.int64,
+                    'uint16': np.uint16, 
+                    'uint32': np.uint32, 
+                    'uint64': np.uint64, 
+                    }
+        
 def count_decimals(num):
     num_str = str(num)
     if '.' in num_str:

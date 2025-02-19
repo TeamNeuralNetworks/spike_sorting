@@ -19,16 +19,16 @@ class trace_visualization_GUI:
         self.time_slider_range = (None, None)
         self.time_window_size = None
         
-    def create_window(self, base_instance):
+    def create_window(self, recording):
         # PySimpleGUI layout
-        self.time_window_size = 1 if base_instance.recording.get_times()[-1] >= 1 else base_instance.recording.get_times()[-1]
+        self.time_window_size = 1 if recording.get_times()[-1] >= 1 else recording.get_times()[-1]
         self.time_slider_resolution = largest_power_of_ten(self.time_window_size)*0.1
-        if base_instance.recording.get_times()[-1] > (self.time_slider_resolution*100):
-            self.time_slider_range = (base_instance.recording.get_times()[0], self.time_slider_resolution*100)
+        if recording.get_times()[-1] > (self.time_slider_resolution*100):
+            self.time_slider_range = (recording.get_times()[0], self.time_slider_resolution*100)
         else:
-            self.time_slider_range = (base_instance.recording.get_times()[0], base_instance.recording.get_times()[-1]-self.time_window_size)
+            self.time_slider_range = (recording.get_times()[0], recording.get_times()[-1]-self.time_window_size)
         
-        checkbox_channel = [[sg.Checkbox(channel_id, key=f'channel_checkbox_{channel_id}', enable_events=True, default=True)] for channel_id in base_instance.recording.get_channel_ids()]
+        checkbox_channel = [[sg.Checkbox(channel_id, key=f'channel_checkbox_{channel_id}', enable_events=True, default=True)] for channel_id in recording.get_channel_ids()]
         checkbox_channel.insert(0, [sg.T('Channels:')])
         checkbox_column = sg.Column(checkbox_channel, size=(200, 300), scrollable=True, vertical_scroll_only=True, expand_y=True)
         
@@ -55,7 +55,7 @@ class trace_visualization_GUI:
                 sg.Text('s')
             ],
             [
-                sg.Text(f'Recording length: {base_instance.recording.get_total_duration()}s', key='recording_info_text'), 
+                sg.Text(f'Recording length: {recording.get_total_duration()}s', key='recording_info_text'), 
                 sg.Button('Refresh', key='refresh_button')
             ],
         ]
@@ -70,7 +70,7 @@ class trace_visualization_GUI:
         self.window = sg.Window('Trace visualisation window', layout, element_justification='center', finalize=True, location=location)
         
         self.fig, self.ax = plt.subplots(figsize=(9, 7))
-        self.create_figure(base_instance.recording.channel_ids, base_instance.recording)
+        self.create_figure(recording.channel_ids, recording)
         
     def draw_figure(self, canvas):
         figure_canvas_agg = FigureCanvasTkAgg(self.fig, canvas)

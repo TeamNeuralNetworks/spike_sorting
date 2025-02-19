@@ -40,10 +40,10 @@ class probe_tool_GUI:
                                                             [sg.pin(sg.Column([[sg.T('height'), sg.Input('6', key=('popup_base_info', 'height', f'shank{x}', 'linear'), size=(7,2))]], key=('popup_base_info', 'height_column', f'shank{x}', 'linear'), visible=False))],
                                                             ],
                                        'multi-column' : lambda x: [[sg.T("Number of colmuns"), sg.Input('3', key=('popup_base_info', 'columns_number', f'shank{x}', 'multi-column'), size=default_input_size)],
-                                                                   [sg.T("Number of electrode per colmun"), sg.Input('10', key=('popup_base_info', 'electrodes_per_columns_number', f'shank{x}', 'multi-column'), size=default_input_size)],
+                                                                   [sg.T("Number of electrode per colmun", tooltip='Can be a single number or one number per column separated by ";"'), sg.Input('10', key=('popup_base_info', 'electrodes_per_columns_number', f'shank{x}', 'multi-column'), size=default_input_size, tooltip='Can be a single number or one number per column separated by ";"')],
                                                                      [sg.T('xpitch'), sg.Input('20', key=('popup_base_info', 'xpitch', f'shank{x}', 'multi-column'), size=default_input_size)],
                                                                      [sg.T('ypitch'), sg.Input('20', key=('popup_base_info', 'ypitch', f'shank{x}', 'multi-column'), size=default_input_size)],
-                                                                     [sg.T('y shift per column', tooltip='Vertical shift for each row of electrodes need to be float separated by ","'), sg.Input('0, -37.5, 0', key=('popup_base_info', 'y_shift_per_column', f'shank{x}', 'multi-column'), size=(10, 2), tooltip='Vertical shift for each row of electrodes need to be float separated by ","')],
+                                                                     [sg.T('y shift per column', tooltip='Can be a single number or one number per column separated by ";"'), sg.Input('0; -37.5; 0', key=('popup_base_info', 'y_shift_per_column', f'shank{x}', 'multi-column'), size=(10, 2), tooltip='Can be a single number or one number per column separated by ";"')],
                                                                      [sg.T('contact_shapes'), sg.Combo(['circle', 'rect', 'square'], default_value='circle', key=('popup_base_info', 'contact_shapes', f'shank{x}', 'multi-column'), enable_events=True)],
                                                                      [sg.pin(sg.Column([[sg.T('radius'), sg.Input('6', key=('popup_base_info', 'radius', f'shank{x}', 'multi-column'), size=(7,2))]], key=('popup_base_info', 'radius_column', f'shank{x}', 'multi-column'), visible=True))],
                                                                      [sg.pin(sg.Column([[sg.T('width'), sg.Input('6', key=('popup_base_info', 'width', f'shank{x}', 'multi-column'), size=(7,2))]], key=('popup_base_info', 'width_column', f'shank{x}', 'multi-column'), visible=False))],
@@ -215,10 +215,17 @@ class probe_tool_GUI:
                 
             elif shank_dict['electrode_arrangement'] == 'multi-column':
                 num_columns = int(values[('popup_base_info', 'columns_number', shank, 'multi-column')])
-                num_contact_per_column = int(values[('popup_base_info', 'electrodes_per_columns_number', shank, 'multi-column')])
+                if ';' in values[('popup_base_info', 'y_shift_per_column', shank, 'multi-column')]:
+                    num_contact_per_column = [int(value) for value in values[('popup_base_info', 'electrodes_per_columns_number', shank, 'multi-column')].split(';')]
+                else:
+                    num_contact_per_column = int(values[('popup_base_info', 'electrodes_per_columns_number', shank, 'multi-column')])
+                    
                 xpitch = float(values[('popup_base_info', 'xpitch', shank, 'multi-column')])
                 ypitch = float(values[('popup_base_info', 'ypitch', shank, 'multi-column')])
-                y_shift_per_column = [float(value) for value in values[('popup_base_info', 'y_shift_per_column', shank, 'multi-column')].split(',')]
+                if ';' in values[('popup_base_info', 'y_shift_per_column', shank, 'multi-column')]:
+                    y_shift_per_column = [float(value) for value in values[('popup_base_info', 'y_shift_per_column', shank, 'multi-column')].split(';')]
+                else:
+                    y_shift_per_column = [float(values[('popup_base_info', 'y_shift_per_column', shank, 'multi-column')]) for columns in range(num_columns)]
                 contact_shapes = values[('popup_base_info', 'contact_shapes', shank, 'multi-column')]
                 if contact_shapes == 'circle':
                     contact_shape_params = {'radius': float(values[('popup_base_info', 'radius', shank, 'multi-column')])}
@@ -421,8 +428,6 @@ class probe_tool_GUI:
                 base_instance.Main_GUI_instance.window['Load_probe_file'].update(button_color='green')
             
             elif event[1] == 'save_probe':
-                
-                
                 path = sg.popup_get_file('Save probe', save_as=True, no_window=True)
                 if path is not None:
                     write_probeinterface(path, self.probe)

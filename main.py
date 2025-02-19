@@ -202,7 +202,7 @@ class Spike_sorting_MAIN:
                     SetLED(self.Main_GUI_instance.window, 'led_Manual', 'green')
                 
                 if self.recording is not None:
-                    self.Main_GUI_instance.window['Load_ephy_file'].update(button_color='green')
+                    self.Main_GUI_instance.window['Load_recording'].update(button_color='green')
                     
                 if self.probe is not None:
                     self.Main_GUI_instance.window['Load_probe_file'].update(button_color='green')
@@ -224,7 +224,7 @@ class Spike_sorting_MAIN:
     #     except:
     #         self.Main_GUI_instance.window.write_event_value('popup_error', "Unable to load multi recording excel file (the excel file must contain 3 column 'ephy_recording_path', 'probe_file_path' and 'output_folder_path')")
         
-    #     self.Main_GUI_instance.window['Load_ephy_file'].update(button_color='green')
+    #     self.Main_GUI_instance.window['Load_recording'].update(button_color='green')
     #     self.Main_GUI_instance.window['Load_probe_file'].update(button_color='green')
     #     self.Main_GUI_instance.window['Load_probe_file'].update(disabled=True)
     #     self.Main_GUI_instance.window['Select_output_folder'].update(button_color='green')
@@ -245,17 +245,21 @@ class Spike_sorting_MAIN:
             self.Main_GUI_instance.window.write_event_value('popup_error', "unable to load ephy data")
             return 
         
-        path_syntax = ephy_extractor_dict[self.pipeline_parameters['load_ephy']['mode']][self.pipeline_parameters['load_ephy']['extractor']]['path_syntax']
-        if os.path.isfile(f"{self.pipeline_parameters['load_ephy']['extractor_parameters'][path_syntax]}/probe.json"):
-            self.pipeline_parameters['probe_file_path'] = f"{self.pipeline_parameters['load_ephy']['extractor_parameters'][path_syntax]}/probe.json"
-            self.load_probe()
-            self.recording = self.recording.set_probe(self.probe)
-                
-        self.Main_GUI_instance.window['Load_ephy_file'].update(button_color='green')
+        if self.pipeline_parameters['load_ephy']['trigger_from'] == 'Recording_tool_GUI':
+            self.Main_GUI_instance.additional_GUI_instance_dict['Recording_tool_instance'].window['main_window'].write_event_value('recording_loaded', "trigger from main")
         
-        if self.pipeline_parameters['preprocessing'] == 'Done' or self.pipeline_parameters['sorting'] == 'Done':
-            self.Main_GUI_instance.reset_analysis_pipeline(self)
-            self.analyzer = None
+        else:
+            path_syntax = ephy_extractor_dict[self.pipeline_parameters['load_ephy']['mode']][self.pipeline_parameters['load_ephy']['extractor']]['path_syntax']
+            if os.path.isfile(f"{self.pipeline_parameters['load_ephy']['extractor_parameters'][path_syntax]}/probe.json"):
+                self.pipeline_parameters['probe_file_path'] = f"{self.pipeline_parameters['load_ephy']['extractor_parameters'][path_syntax]}/probe.json"
+                self.load_probe()
+                self.recording = self.recording.set_probe(self.probe)
+                    
+            self.Main_GUI_instance.window['Load_recording'].update(button_color='green')
+            
+            if self.pipeline_parameters['preprocessing'] == 'Done' or self.pipeline_parameters['sorting'] == 'Done':
+                self.Main_GUI_instance.reset_analysis_pipeline(self)
+                self.analyzer = None
 
     def load_probe(self):
         self.probe = read_probeinterface(self.pipeline_parameters['probe_file_path'])

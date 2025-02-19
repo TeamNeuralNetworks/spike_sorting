@@ -36,7 +36,7 @@ class preprocessing_GUI:
         else:
             dtype = ''
         type_row = [sg.T('Change recording dtype', tooltip='Some sorter requier spécific type of data (kilosort 2.5 required int16 for exemple)'),
-                    sg.Combo(list(availabled_dtype.keys()), default_value=dtype, key=('astype', 'dtype'), size=(8, 2), tooltip='Some sorter requier spécific type of data (kilosort 2.5 required int16 for exemple)'),
+                    sg.Combo(list(availabled_dtype.keys()), default_value=dtype, key=('astype', 'dtype'), tooltip='Some sorter requier spécific type of data (kilosort 2.5 required int16 for exemple)'),
                     sg.Checkbox('', default=preprocessing_param['astype']['activate'], k=('astype', 'activate'), tooltip='Some sorter requier spécific type of data (kilosort 2.5 required int16 for exemple)')],
         
         #TODO add the script from coline to remove noise
