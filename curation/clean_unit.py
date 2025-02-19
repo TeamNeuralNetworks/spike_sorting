@@ -14,7 +14,7 @@ import multiprocessing as mp
 import matplotlib.pyplot as plt
 import numpy as np
 import os
-import phate
+# import phate
 import pandas as pd
 from tqdm import tqdm
 from sklearn.metrics import silhouette_score
@@ -174,11 +174,11 @@ def remove_edge_artefact(analyzer, cs, df_cleaning_summary, save_folder=None, le
 
 def compute_best_split_using_silhouette(splitting_results_dict, result_message, waveforms, method, n_components, max_split, threshold, unit_id, unit_idx, verbose=False, total_numbder_of_unit=None):
     
-    if method == 'phate':
-        phate_operator = phate.PHATE(n_jobs=-2)
-        phate_operator.set_params(knn=5, n_components=n_components, verbose=verbose)
-        principal_components = phate_operator.fit_transform(waveforms)
-    elif method == 'pca':
+    # if method == 'phate':
+    #     phate_operator = phate.PHATE(n_jobs=-2)
+    #     phate_operator.set_params(knn=5, n_components=n_components, verbose=verbose)
+    #     principal_components = phate_operator.fit_transform(waveforms)
+    if method == 'pca':
         pca = PCA(n_components=n_components)
         principal_components = pca.fit_transform(waveforms)
 

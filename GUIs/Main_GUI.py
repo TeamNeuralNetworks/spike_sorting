@@ -248,7 +248,8 @@ class Main_GUI:
                             elif 'Load_ephy_folder' in event:
                                 path = select_folder_file(mode='folder')
                             elif event == 'Load_multi_ephy_file':
-                                path = select_folder_file(mode='folder')
+                                sg.popup_error('Not yet implemanted')
+                                path = None
                                 
                             if path is not None:
                                 base_instance.pipeline_parameters['load_ephy']['trigger_from'] = values[event]
