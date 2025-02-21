@@ -251,7 +251,6 @@ class Spike_sorting_MAIN:
                 self.Main_GUI_instance.window.write_event_value('popup_error', "Unable to load any recordings")
                 return
         else:
-            
             try:
                 self.recording = ephy_extractor_dict[self.pipeline_parameters['load_ephy']['mode']][self.pipeline_parameters['load_ephy']['extractor']]['function'](self.pipeline_parameters['load_ephy']['extractor_parameters'])
             except Exception:

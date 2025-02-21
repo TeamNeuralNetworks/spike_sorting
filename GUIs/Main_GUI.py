@@ -304,7 +304,7 @@ class Main_GUI:
                                     base_instance.state = "load_recording"
                                 else:
                                     self.additional_GUI_instance_dict['additional_recording_info_instance'].path = path
-                                    self.additional_GUI_instance_dict['additional_recording_info_instance'].create_window(mode=base_instance.pipeline_parameters['load_ephy']['mode'],)
+                                    self.additional_GUI_instance_dict['additional_recording_info_instance'].create_window(mode=base_instance.pipeline_parameters['load_ephy']['mode'], extension=base_instance.pipeline_parameters['load_ephy']['extension'])
 
                             
                         elif event == 'Multi_file_loading_chose_extention':

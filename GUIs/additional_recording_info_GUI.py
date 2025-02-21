@@ -9,7 +9,7 @@ import numpy as np
 import PySimpleGUI as sg
 import copy
 
-from additional.toolbox import get_availabled_extractor, ephy_extractor_dict, availabled_dtype
+from additional.toolbox import get_availabled_extractor, ephy_extractor_dict, availabled_dtype, get_availabled_extension_extractor_converter_dict
 
 
 class additional_recording_info_GUI:
@@ -30,6 +30,7 @@ class additional_recording_info_GUI:
             'sampling_frequency': lambda x: [sg.T('Sampling frequency'), sg.I('20000', k=(x,'sampling_frequency'), size=default_input_size), sg.T('Hz')],
             'dtype': lambda x: [sg.T('dtype'), sg.Combo(list(availabled_dtype.keys()), default_value=list(availabled_dtype.keys())[0], k=(x, 'dtype'))],
             'num_channels': lambda x: [sg.T('Number of channels'), sg.I('16', k=(x,'num_channels'), size=default_input_size)],
+            'stream_id': lambda x: [sg.T('Stream id'), sg.I('0', k=(x,'stream_id'), size=default_input_size)],
             }
         
         extractor_args_element_list = []
@@ -43,11 +44,15 @@ class additional_recording_info_GUI:
         
         return extractor_args_element_list
     
-    def create_window(self, mode, multi_recording_loading=False):
+    def create_window(self, mode, extension, multi_recording_loading=False):
         self.mode = mode
 
         available_extractor = get_availabled_extractor(mode=self.mode)
-        self.extractor = available_extractor[0]
+        extension_extractor_converter_dict = get_availabled_extension_extractor_converter_dict(mode=mode)
+        if extension in extension_extractor_converter_dict.keys():
+            self.extractor = extension_extractor_converter_dict[extension]
+        else:
+            self.extractor = available_extractor[0] #TODO if 
         
         additional_recording_info_layout = self.get_extractor_args_element()
         additional_recording_info_layout.insert(0, [sg.T('Recording format'), 
@@ -81,6 +86,8 @@ class additional_recording_info_GUI:
                     
                     if window_key[1] == 'dtype':
                         current_param_value = availabled_dtype[current_param_value]
+                    elif window_key[1] == 'stream_id':
+                        pass #need to stay in str
                     else:
                         if not isinstance(current_param_value, bool) and current_param_value is not None:
                             try:
@@ -95,7 +102,6 @@ class additional_recording_info_GUI:
                                 pass
                     
                     new_load_ephy_param[window_key[1]] = current_param_value
-                    
         return new_load_ephy_param
     
     def event_handler(self, values, event, base_instance):

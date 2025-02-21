@@ -22,7 +22,7 @@ ephy_extractor_dict = {'file': {
                                                                                                                                     'dtype',
                                                                                                                                     'num_channels',
                                                                                                                                     ]},
-                                'Intan': {'function': lambda x:read_intan(**x, stream_id='0'), 'path_syntax': 'file_path', 'args': [], 'extension': 'rhd'},
+                                'Intan': {'function': lambda x:read_intan(**x), 'path_syntax': 'file_path', 'args': ['stream_id'], 'extension': 'rhd'},
                                 },
                        'folder': {'Binary': {'function': lambda x:BinaryFolderRecording(**x), 'path_syntax': 'folder_path', 'args': []},                  
                                   'Zarr': {'function': lambda x:ZarrRecordingExtractor(**x), 'path_syntax': 'folder_path', 'args': []},
