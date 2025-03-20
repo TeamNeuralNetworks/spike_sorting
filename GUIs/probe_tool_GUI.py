@@ -104,6 +104,9 @@ class probe_tool_GUI:
         else:
             self.probe_df['device_channel_indices'] = ''
             
+        self.probe_df['contact_ids'] = self.probe_df['contact_ids'].astype(str)
+            
+        
         # Layout
         layout = [
             [sg.Column([[sg.Table(values=self.probe_df.values.tolist(), headings=list(self.probe_df.columns), 
@@ -283,6 +286,16 @@ class probe_tool_GUI:
         self.update_probe_df_with_displayed_table()
         self.window[('edit_table_window', 'probe_param_table')].update(values=self.probe_df.values.tolist())
         
+        try:
+            self.probe_df['contact_ids'] = self.probe_df['contact_ids'].astype(int)
+        except ValueError:
+            pass
+        
+        try:
+            self.probe_df['contact_ids'] = self.probe_df['contact_ids'].astype(float)
+        except ValueError:
+            pass
+        
         probe = Probe(ndim=2, si_units='um')
         shapes = np.array(self.probe_df['contact_shapes'])
         contact_ids = np.array(self.probe_df['contact_ids'])
@@ -320,6 +333,7 @@ class probe_tool_GUI:
                             contact_ids=contact_ids,
                             shank_ids=shank_ids
                             )
+        
         
         device_channel_indices = self.probe_df['device_channel_indices'].tolist()
         device_channel_indices = [x for x in device_channel_indices if x != '']
@@ -430,7 +444,7 @@ class probe_tool_GUI:
             elif event[1] == 'save_probe':
                 path = sg.popup_get_file('Save probe', save_as=True, no_window=True)
                 if path is not None:
-                    write_probeinterface(path, self.probe)
+                    write_probeinterface(f'{path}.json', self.probe)
                     base_instance.probe = self.probe
                     base_instance.Main_GUI_instance.window['Load_probe_file'].update(button_color='green')
                         

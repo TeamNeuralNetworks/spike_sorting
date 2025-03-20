@@ -236,7 +236,8 @@ class Spike_sorting_MAIN:
     #     self.Main_GUI_instance.reset_analysis_pipeline(self)
 
     def load_recording(self):
-
+        
+        print('Ephy file loading in progress...')
         if self.pipeline_parameters['load_ephy']['mode'] == 'multi_file':
             self.recording = []
             for extractor_parameters in self.pipeline_parameters['load_ephy']['extractor_parameters']:
@@ -259,6 +260,7 @@ class Spike_sorting_MAIN:
                 self.Main_GUI_instance.window.write_event_value('popup_error', "unable to load ephy data")
                 return 
         
+        print('Ephy file loaded sucessfully')
         if self.pipeline_parameters['load_ephy']['trigger_from'] == 'Recording_tool_GUI':
             self.Main_GUI_instance.additional_GUI_instance_dict['Recording_tool_instance'].window['main_window'].write_event_value('recording_loaded', "trigger from main")
         

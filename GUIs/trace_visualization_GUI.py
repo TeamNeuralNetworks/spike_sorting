@@ -18,6 +18,7 @@ class trace_visualization_GUI:
         self.time_slider_resolution = None
         self.time_slider_range = (None, None)
         self.time_window_size = None
+        self.fig_size = (9, 7)
         
     def create_window(self, recording):
         # PySimpleGUI layout
@@ -67,9 +68,16 @@ class trace_visualization_GUI:
         else:
             location = None
             
-        self.window = sg.Window('Trace visualisation window', layout, element_justification='center', finalize=True, location=location)
+        self.window = sg.Window('Trace visualisation window', 
+                                layout,
+                                element_justification='center',
+                                finalize=True,
+                                location=location,
+                                resizable=True, 
+                                enable_window_config_events=True)
         
-        self.fig, self.ax = plt.subplots(figsize=(9, 7))
+        
+        self.fig, self.ax = plt.subplots()
         self.create_figure(recording.channel_ids, recording)
         
     def draw_figure(self, canvas):
@@ -89,6 +97,9 @@ class trace_visualization_GUI:
         self.toolbar.pack(side='top', fill='both', expand=1)
     
     def create_figure(self, selected_channels, recording, time_range=None):
+        
+        self.fig.set_size_inches(self.fig_size)
+            
         plt.ioff()  # Disable interactive mode
     
         # Clear the previous figure from the Tkinter canvas if it exists
@@ -184,10 +195,25 @@ class trace_visualization_GUI:
         self.create_figure(selected_channels, base_instance.recording, time_range=time_range)
     
     def event_handler(self, values, event, base_instance):
+        
+        
+        
+        if event == "__WINDOW CONFIG__":
+            if not hasattr(self, 'prev_window_size'):
+                self.window.refresh()
+                self.prev_window_size = self.window.size 
+            elif self.window.size != self.prev_window_size:
+                self.prev_window_size = self.window.size  # Update previous size
+                new_width = self.window.size[0] / 129.4  # Scale width
+                new_height = self.window.size[1] / 117.27  # Scale height
+                self.fig_size = (new_width, new_height)
+                self.redraw_fig(values, event, base_instance)
+                
         if event == sg.WIN_CLOSED:
             self.window.close()
             self.window = None
-
+            del self.prev_window_size
+            
         elif event == 'time_slider' or event == 'time_window_size' or event == 'refresh_button':
             self.redraw_fig(values, event, base_instance)
         
@@ -197,9 +223,5 @@ class trace_visualization_GUI:
                 if event == 'select_all_channels':
                     self.window[selected_channel].update(True)
                 else:
-                    self.window[selected_channel].update(False)
-                
-
-
-        
+                    self.window[selected_channel].update(False)      
             
